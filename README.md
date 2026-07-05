@@ -51,7 +51,9 @@ my-studio/                        <- install here, run everything from here
     engines/    <- HyperFrames / Remotion workspaces
 ```
 
-Then:
+Then say "talk to Manny". Manny the Manticore (mc-agent) is the studio's director and front door: he detects that the studio is not set up yet and walks you through mc-setup, turns your first idea into a project, and routes every stage from there. You never have to know which skill does what.
+
+Prefer to drive the skills directly? The same path by hand:
 
 1. Run mc-setup ("run manticore setup"). It checks dependencies, interviews you about your editor, brand, and tools, and writes the studio config everything reads.
 2. Run mc-new, pick a format (start with talking-head), and talk to mc-braindump about your idea.
@@ -92,10 +94,11 @@ Six ship by default: talking-head, screen-tutorial (real UI only, generated b-ro
 
 ## The skills
 
-14 skills, each self-contained: a skill ships its own defaults (`customize.toml`), scripts, and knowledge, and reads only its own folder, the installed BMad core scripts, and your project files.
+15 skills, each self-contained: a skill ships its own defaults (`customize.toml`), scripts, and knowledge, and reads only its own folder, the installed BMad core scripts, and your project files.
 
 | Skill | What it does |
 |---|---|
+| mc-agent | Manny the Manticore, the visionary director: the studio front door, onboarding, routing, and coaching |
 | mc-setup | First-run and any-time configuration |
 | mc-pipeline | Where is my project, what's next, route to the right stage |
 | mc-new | Scaffold a project from a format profile |
@@ -117,11 +120,11 @@ Taste lives in files (your voice bible, format profiles, brand tokens, blacklist
 
 ## Status
 
-This is a young project, shared early. Honest state as of 2026-07-04:
+This is a young project, shared early. Honest state as of 2026-07-05:
 
-- Working today: setup and dependency checking, config resolution, project scaffolding, the brain dump / outline / script stages with live lint against your blacklist, and OGraf graphic scaffolding + verification.
-- In development (contracts fixed, implementations landing): the cut lane (transcription, cut candidates, FCPXML export), render verification, API asset farming, and direct Resolve import.
-- Planned: Premiere export lanes, a free local transcription provider, multitrack recording support, and a research/show-prep skill. See [TODO.md](TODO.md) for the full roadmap.
+- Working today: Manny the front-door agent, setup and dependency checking, config resolution, project scaffolding, the brain dump / outline / script stages with live lint against your blacklist, the full cut lane (parakeet-mlx word-level transcription, cut candidate detection, FCPXML export, preview render with boundary-frame verification), and OGraf graphic scaffolding + verification.
+- In development (contracts fixed, implementations landing): graphics render verification, API asset farming, and direct Resolve import.
+- Planned: Premiere export lanes, multitrack recording support, and a research/show-prep skill with scheduled briefings. See [TODO.md](TODO.md) for the full roadmap.
 
 ## Part of the BMad ecosystem
 

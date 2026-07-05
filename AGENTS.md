@@ -11,6 +11,7 @@ Taste lives in files. Mechanics live in scripts. Skills are thin routers between
 | Path | Purpose |
 |---|---|
 | `.claude-plugin/marketplace.json` | Module manifest (install via `npx bmad-method install --custom-source <repo>`) |
+| `skills/mc-agent/` | Manny the Manticore, the persona agent and studio front door: a skill whose `[agent]` block in `customize.toml` carries the persona and capabilities menu (the BMad agent pattern); routes to the other skills, never does stage mechanics itself |
 | `skills/mc-pipeline/` | The router; owns `PIPELINE.md`, the master stage/gate/project.json contract |
 | `skills/mc-setup/` | Configuration skill: writes the studio config (`[modules.manticore]` in `{project-root}/_bmad/custom/config.toml`); its `customize.toml` carries the full `[defaults]`; `assets/` holds the templates it copies into the studio (tokens, blacklist starter, voice-bible spec, format profiles) |
 | `skills/mc-ograf/` | OGraf graphics authoring (scaffold, verify, spec references); gated on `[editor] ograf-editable` for the editor lane, always available for the OBS/SPX-GC live lane |

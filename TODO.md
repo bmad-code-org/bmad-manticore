@@ -4,7 +4,8 @@ State as of 2026-07-04. Read AGENTS.md first (module conventions and design inva
 
 ## Where things stand
 
-- The module is fully scaffolded in shareable BMad module shape: marketplace.json, 14 self-contained skills (12 stages + mc-setup + mc-ograf), the studio config layer ([modules.manticore] in _bmad/custom/config.toml via the installed resolve_config.py, plus per-skill customize.toml via resolve_customization.py), format profiles, and user docs.
+- The module is fully scaffolded in shareable BMad module shape: marketplace.json, 15 self-contained skills (12 stages + mc-setup + mc-ograf + mc-agent), the studio config layer ([modules.manticore] in _bmad/custom/config.toml via the installed resolve_config.py, plus per-skill customize.toml via resolve_customization.py), format profiles, and user docs.
+- mc-agent (Manny the Manticore, added 2026-07-05) is the persona front door, built on the BMad agent-skill pattern (persona and menu in the `[agent]` block of customize.toml, mirroring bmm's bmad-agent-analyst). It routes to the other skills and owns onboarding, coaching, creator memory ({brand-path}/creator-profile.md), and the grow-the-studio guidance. Follow-on when wanted: the memory/sanctum agent archetype from bmad-agent-builder for cross-session autonomy.
 - All scripts run via `uv run` and carry PEP 723 inline metadata; declare script dependencies there, never ask users to pip install.
 - Tested and working: `mc-new/scripts/new_project.py`, `mc-script/scripts/lint_script.py` (duplicated into mc-outline and mc-package), `mc-setup/scripts/check_deps.py`, and the mc-ograf scaffold/verify pair (with tests). Config resolution rides the installed core scripts (resolve_config.py, resolve_customization.py); the module bundles no resolver.
 - The cut lane is IMPLEMENTED and verified against real footage (2026-07-05, project camera-a-test): `transcribe.py` (parakeet-mlx lane, output byte-identical to the validated run), `cutplan.py` (silence/filler/stutter/retake/marker detectors, calibrated on the same run), `edl_to_fcpxml.py` (FCPXML 1.9, exact rational times, outward frame snapping, refuses VFR), `render_preview.py` (draft render + 30 ms fades + boundary-frame extraction), each with a unit suite in `mc-cut/scripts/tests/`. Editor-import sync verification in Resolve is still owed on the first real project (the checklist enforces it).
@@ -30,15 +31,31 @@ Many creators record multitrack: a full-screen talking-head file plus one or mor
 - Decide the switch points unassisted from context (when the words reference the screen, switch to it; when it is story or opinion, come back to the face), with clean transitions. The proposed switches are taste calls presented at gate 2 like any other cut decision.
 - Export the multitrack result through the same `[editor]` lanes (FCPXML with stacked tracks first).
 
-### mc-research: niche research and show-prep crons
+### Scheduled agent runs: a harness-agnostic core skill, plus mc-research on top
 
-The piece that makes Manticore unique for timely, frequent publishing. A simple skill that helps the creator stand up content retrieval and research automations for their niche, then stays out of the way:
+Split into two pieces (decided 2026-07-05). The generic half belongs in BMad core so any module can use it; Manticore then ships a thin niche-research layer over it.
 
-- Sources: topic lists, subscriptions, channel/URL lists, maintained by the skill.
-- Modes: scheduled crons for constantly refreshed research, on-demand runs, daily briefings, and a morning-podcast option (a briefing script, optionally rendered to audio via a configured TTS lane).
-- The point is show prep: aggregate on a topic, distill it, let the creator consume it fast, so they can produce their own take while it is current.
-- Config lives in the studio config (likely a `[research]` sub-table of `[modules.manticore]`): where raw retrieved content (transcripts, articles) is stored if desired, where distillations are stored if desired, where final briefings/assets are saved, and whether results get delivered elsewhere.
-- Crons can retrieve a lot; storage and retention choices are explicit config, never a surprise.
+The core skill (target: the BMad core module, built in a bmad-bmm worktree, its own PR):
+
+- Sets up scheduled headless agent runs on the user's own machine with whatever agent CLI they have. Researched 2026-07-05: anthropics/launch-your-agent is NOT this (it deploys cloud-hosted Claude Managed Agents with cloud-side scheduling); the local, harness-agnostic version is new ground.
+- Detects installed CLIs and their headless forms: `claude -p "<prompt>" --output-format json`, `gemini -p "<prompt>" --output-format json` (add `--yolo` only in trusted envs), `codex exec "<prompt>"` (final message to stdout, progress to stderr). One wrapper parameterizing `{cli} {flags} "{prompt}"` covers all three; the user picks the default.
+- Writes a PEP 723 uv wrapper script per job: invoke the CLI, write output to a dated file, capture stdout+stderr to a log.
+- Installs the schedule per platform: launchd plist in ~/Library/LaunchAgents on macOS (survives sleep/reboot better than cron), crontab on Linux (systemd timer as the alternative). Handles the classic cron traps explicitly: minimal PATH and no shell profile, so absolute path to the CLI binary and exported env vars for keys; MAILTO="" against mail spam.
+- Jobs are listed, edited, and removed by the same skill; every job's prompt, schedule, and output location are plain files the user can read.
+
+mc-research (Manticore's layer, once the core skill exists; interim: mc-research can carry the scheduling mechanics itself and donate them to core later):
+
+- Show prep for the creator's niche: topic lists, subscriptions, channel/URL/subreddit lists, maintained by the skill; the daily job aggregates (web, X, YouTube via yt-dlp transcripts, RSS), distills, and writes a dated intel briefing into the studio (e.g. `manticore/research/YYYY-MM-DD-briefing.md`).
+- Modes: scheduled daily briefings, on-demand runs, and a morning-podcast option: the briefing agent writes a two-host script, then a TTS lane renders it (providers below).
+- Config in the studio config (a `[research]` sub-table of `[modules.manticore]`): sources, where raw retrieved content is stored if desired, where distillations and briefings land, delivery options. Crons can retrieve a lot; storage and retention choices are explicit config, never a surprise.
+- mc-agent (Manny) fronts all of this: interviews the creator about their niche and standing interests (creator-profile.md), proposes the jobs, and routes here to install them.
+
+Podcast/TTS lanes for the morning-podcast option (researched 2026-07-05):
+
+- Default, free and local: Kokoro (82M params, Apache 2.0, ~327MB, faster than realtime on CPU, 54 voices). Not a native dialogue model: synthesize each host's turns separately and stitch. No API key, fits the local-first default.
+- Cheap cloud two-host lane: Gemini TTS (gemini-2.5-flash-preview-tts and successors) has native multi-speaker output, max 2 speakers per request, speaker-to-voice mapping in speech_config, roughly $10 per 1M audio output tokens on the Flash tier.
+- Premium lane: ElevenLabs Text to Dialogue (Eleven v3): no hard speaker cap, emotion tags, best quality, roughly $0.10 per 1,000 characters.
+- NotebookLM audio overviews are Enterprise-API-only (notebooks.audioOverviews.create + Podcast API on GCP); the Gemini CLI does not expose audio generation. Treat it as an optional fourth provider for users who already have GCP Enterprise, never a dependency. Community wrappers (notebooklm-py) drive the consumer UI headlessly but are brittle and ToS-gray; do not build on them.
 
 ### Audio lanes: music, SFX, and TTS
 

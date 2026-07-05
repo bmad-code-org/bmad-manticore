@@ -13,6 +13,7 @@
       "version": "0.0.1",
       "author": { "name": "Brian (BMad) Madison" },
       "skills": [
+        "./skills/mc-agent",
         "./skills/mc-setup",
         "./skills/mc-ograf",
         "./skills/mc-pipeline",

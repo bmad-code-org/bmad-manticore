@@ -2,7 +2,9 @@
 
 How to go from a fresh install to a working studio. Ten minutes of setup, then the pipeline does the remembering.
 
-Note on status: Manticore is shared early. The setup, brain dump, outline, and script stages work today; the cut and asset lanes are landing (their contracts are fixed). The README's Status section is the source of truth for what runs right now.
+The short version: install, then say "talk to Manny". Manny the Manticore (mc-agent) is the studio's director and front door; he notices when the studio is not set up, runs setup with you, turns your ideas into projects, and routes every stage after that. This guide is the same path spelled out, for when you want to understand or drive the pieces yourself.
+
+Note on status: Manticore is shared early. The setup, brain dump, outline, script, and cut stages work today; the graphics and asset lanes are landing (their contracts are fixed). The README's Status section is the source of truth for what runs right now.
 
 ## 1. Pick where your studio lives
 
