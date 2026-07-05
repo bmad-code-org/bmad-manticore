@@ -35,7 +35,7 @@ Many creators record multitrack: a full-screen talking-head file plus one or mor
 
 Split into two pieces (decided 2026-07-05). The generic half belongs in BMad core so any module can use it; Manticore then ships a thin niche-research layer over it.
 
-The core skill (target: the BMad core module, built in a bmad-bmm worktree, its own PR):
+The core skill EXISTS as of 2026-07-05: `bmad-autopilot`, built on the `bmad-autopilot` branch of bmad-bmm (src/core-skills/bmad-autopilot, 57-test suite, pending PR). Manticore work that depends on it (mc-research routing, Manny awareness) waits until it merges and ships in a bmad-method release. Its shape, for reference:
 
 - Sets up scheduled headless agent runs on the user's own machine with whatever agent CLI they have. Researched 2026-07-05: anthropics/launch-your-agent is NOT this (it deploys cloud-hosted Claude Managed Agents with cloud-side scheduling); the local, harness-agnostic version is new ground.
 - Detects installed CLIs and their headless forms: `claude -p "<prompt>" --output-format json`, `gemini -p "<prompt>" --output-format json` (add `--yolo` only in trusted envs), `codex exec "<prompt>"` (final message to stdout, progress to stderr). One wrapper parameterizing `{cli} {flags} "{prompt}"` covers all three; the user picks the default.
