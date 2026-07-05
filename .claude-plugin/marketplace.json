@@ -1,0 +1,33 @@
+{
+  "name": "bmad-manticore",
+  "owner": { "name": "Brian (BMad) Madison" },
+  "license": "MIT",
+  "homepage": "https://github.com/bmad-code-org/bmad-manticore",
+  "repository": "https://github.com/bmad-code-org/bmad-manticore",
+  "keywords": ["bmad", "video", "youtube", "content", "motion-graphics", "editing"],
+  "plugins": [
+    {
+      "name": "bmad-manticore",
+      "source": "./",
+      "description": "AI video production pipeline: brain dump to a rough cut sitting in your editor, in your own words, with approval gates at every taste decision.",
+      "version": "0.0.1",
+      "author": { "name": "Brian (BMad) Madison" },
+      "skills": [
+        "./skills/mc-setup",
+        "./skills/mc-ograf",
+        "./skills/mc-pipeline",
+        "./skills/mc-new",
+        "./skills/mc-braindump",
+        "./skills/mc-outline",
+        "./skills/mc-script",
+        "./skills/mc-cut",
+        "./skills/mc-beats",
+        "./skills/mc-graphics",
+        "./skills/mc-assets",
+        "./skills/mc-package",
+        "./skills/mc-stream-pack",
+        "./skills/mc-retro"
+      ]
+    }
+  ]
+}

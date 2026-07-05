@@ -1,0 +1,121 @@
+# DO NOT EDIT -- overwritten on every update.
+#
+# Default studio configuration for BMad Manticore, in full. mc-setup reads
+# these defaults, interviews the creator, and writes the result to
+# [modules.manticore] in {project-root}/_bmad/custom/config.toml
+# (personal overrides go in config.user.toml next to it; resolve with
+# {project-root}/_bmad/scripts/resolve_config.py --key modules.manticore).
+#
+# API keys NEVER go in any TOML; only the names of env vars that hold them.
+#
+# Override files for this skill itself:
+#   {project-root}/_bmad/custom/mc-setup.toml         (team)
+#   {project-root}/_bmad/custom/mc-setup.user.toml    (personal)
+
+[workflow]
+
+activation_steps_prepend = []
+activation_steps_append = []
+persistent_facts = []
+
+# --- Studio defaults: the seed values for [modules.manticore] -------------
+
+[defaults]
+
+config-version = 1
+
+[defaults.owner]
+
+# Your name as skills should address you, and the channel/brand name.
+name = ""
+channel = ""
+# Measured speaking rate in words per minute, for script runtime estimates.
+# Measure from a real transcript; on-camera educators often run 180+.
+wpm = 145
+# Links appended to video descriptions, in order. Plain URLs or "Label: URL".
+links = []
+
+[defaults.paths]
+
+# Where your studio data lives, relative to project root unless absolute.
+# brand-path holds tokens.json, voice-bible.md, blacklist.md, exemplars/, headshots/.
+brand-path = "manticore/brand"
+# formats-path holds your editable format profiles (learnings accumulate there).
+formats-path = "manticore/formats"
+# projects-path holds one folder per video.
+projects-path = "manticore/projects"
+# engines-path holds your HyperFrames/Remotion/OGraf engine workspaces.
+engines-path = "manticore/engines"
+
+[defaults.video]
+
+record-resolution = "3840x2160"
+delivery-resolution = "1920x1080"
+fps = 30
+
+[defaults.editor]
+
+# Your NLE. Known values: "resolve", "fcp", "premiere", "descript", "other".
+name = "resolve"
+# Timeline format the cut stage exports for your editor.
+#   "fcpxml"  DaVinci Resolve, Final Cut Pro (implemented first)
+#   "xmeml"   Premiere Pro (planned; FCP7-style XML)
+#   "edl"     CMX3600, the universal fallback (planned)
+#   "none"    skip timeline export; you get edl.json + cutplan.md + preview.mp4
+#             and cut manually in your editor (Descript and others)
+timeline-format = "fcpxml"
+# true ONLY if your editor imports OGraf packages natively (DaVinci Resolve 21+).
+ograf-editable = false
+
+[defaults.transcription]
+
+# Word-level transcription for the cut stage. Options:
+#   "parakeet-mlx"       the default: free + local (Apple Silicon), word
+#                        timestamps, verbatim fillers preserved (validated on
+#                        real footage 2026-07-05; model parakeet-tdt-0.6b-v3)
+#   "elevenlabs-scribe"  metered API lane (~$0.22 per footage hour); not
+#                        implemented, add on demand
+#   "deepgram-nova3"     API alternative with keyterm biasing (planned)
+provider = "parakeet-mlx"
+api-key-env = "ELEVENLABS_API_KEY"
+
+[defaults.assets]
+
+# Default generation lanes for mc-assets. Values name either an API provider
+# ("xai-api", "veo-api") or a [[tools]] entry (CLI lane).
+image-provider = "xai-api"
+video-provider = "xai-api"
+escalation-provider = "veo-api"
+xai-api-key-env = "XAI_API_KEY"
+gemini-api-key-env = "GEMINI_API_KEY"
+
+[defaults.mcp]
+
+# MCP servers mc-setup has verified in this project. Skills treat false/absent
+# as "not available" and fall back gracefully.
+davinci-resolve = false
+
+# --- CLI tool registry ----------------------------------------------------
+# The creator's [[tools]] entries are written into [modules.manticore] by
+# mc-setup, one block per agentic/generation CLI. The `notes` field is the
+# persistent memory: everything a skill needs to drive the tool correctly.
+#
+# [[modules.manticore.tools]]
+# name = "grok"
+# capabilities = ["image", "video", "x"]     # Imagine image + video gen, X/Twitter access
+# headless = 'grok -p "<prompt>" --always-approve'
+# models = []                                # your preferred models, if the tool takes them
+# notes = """
+# Imagine image and video gen (image-to-video, 720p, native audio). Cinematic
+# bias. Also the lane for X/Twitter research and posting. Never use for UI or
+# readable on-screen text; text renders as gibberish.
+# """
+#
+# [[modules.manticore.tools]]
+# name = "agy"
+# capabilities = ["image"]                   # Gemini image gen on plan quota
+# headless = 'agy -p "<prompt>" --dangerously-skip-permissions'
+# notes = """
+# Gemini image gen, literal/illustrative style. Draws on plan quota, no
+# per-image billing.
+# """

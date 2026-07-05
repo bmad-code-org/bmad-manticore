@@ -1,0 +1,6 @@
+.env
+.DS_Store
+_inbox/
+__pycache__/
+*.pyc
+node_modules/

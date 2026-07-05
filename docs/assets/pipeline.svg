@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 470" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#B3A89E"/>
+    </marker>
+    <marker id="arrowCopper" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#C8824F"/>
+    </marker>
+  </defs>
+
+  <!-- canvas -->
+  <rect x="0" y="0" width="1180" height="470" rx="16" fill="#122543"/>
+  <rect x="0.5" y="0.5" width="1179" height="469" rx="16" fill="none" stroke="#2A4068"/>
+
+  <!-- ══════════ row 1 ══════════ -->
+
+  <!-- brain dump -->
+  <rect x="135" y="70" width="150" height="56" rx="12" fill="#1B3358" stroke="#2A4068"/>
+  <text x="210" y="94" text-anchor="middle" fill="#F4EFEA" font-size="16" font-weight="600">brain dump</text>
+  <text x="210" y="113" text-anchor="middle" fill="#B3A89E" font-size="11">your words, verbatim</text>
+
+  <line x1="285" y1="98" x2="323" y2="98" stroke="#B3A89E" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- outline · gate 1 -->
+  <rect x="330" y="70" width="170" height="56" rx="12" fill="#1B3358" stroke="#B66D46" stroke-width="1.5"/>
+  <text x="415" y="94" text-anchor="middle" fill="#F4EFEA" font-size="16" font-weight="600">outline</text>
+  <text x="415" y="113" text-anchor="middle" fill="#C8824F" font-size="11" font-weight="700">GATE 1 · YOU APPROVE</text>
+
+  <line x1="500" y1="98" x2="538" y2="98" stroke="#B3A89E" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- script -->
+  <rect x="545" y="70" width="150" height="56" rx="12" fill="#1B3358" stroke="#2A4068"/>
+  <text x="620" y="94" text-anchor="middle" fill="#F4EFEA" font-size="16" font-weight="600">script</text>
+  <text x="620" y="113" text-anchor="middle" fill="#B3A89E" font-size="11">woven, linted, QA'd</text>
+
+  <line x1="695" y1="98" x2="733" y2="98" stroke="#B3A89E" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- you record -->
+  <rect x="740" y="70" width="150" height="56" rx="12" fill="#122543" stroke="#B3A89E" stroke-dasharray="5 4"/>
+  <text x="815" y="94" text-anchor="middle" fill="#F4EFEA" font-size="16" font-weight="600">you record</text>
+  <text x="815" y="113" text-anchor="middle" fill="#B3A89E" font-size="11">your camera, your way</text>
+
+  <line x1="890" y1="98" x2="928" y2="98" stroke="#B3A89E" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- cut · gate 2 -->
+  <rect x="935" y="70" width="150" height="56" rx="12" fill="#1B3358" stroke="#B66D46" stroke-width="1.5"/>
+  <text x="1010" y="94" text-anchor="middle" fill="#F4EFEA" font-size="16" font-weight="600">cut</text>
+  <text x="1010" y="113" text-anchor="middle" fill="#C8824F" font-size="11" font-weight="700">GATE 2 · YOU APPROVE</text>
+
+  <!-- wrap connector: row 1 → row 2 -->
+  <path d="M 1010 126 C 1010 175, 900 160, 620 168 C 340 176, 172 170, 165 205" fill="none" stroke="#B3A89E" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- ══════════ row 2 ══════════ -->
+
+  <!-- beats · gate 3 -->
+  <rect x="85" y="212" width="170" height="56" rx="12" fill="#1B3358" stroke="#B66D46" stroke-width="1.5"/>
+  <text x="170" y="236" text-anchor="middle" fill="#F4EFEA" font-size="16" font-weight="600">graphics beats</text>
+  <text x="170" y="255" text-anchor="middle" fill="#C8824F" font-size="11" font-weight="700">GATE 3 · YOU APPROVE</text>
+
+  <line x1="255" y1="240" x2="293" y2="240" stroke="#B3A89E" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- graphics + assets -->
+  <rect x="300" y="212" width="185" height="56" rx="12" fill="#1B3358" stroke="#2A4068"/>
+  <text x="392" y="236" text-anchor="middle" fill="#F4EFEA" font-size="16" font-weight="600">graphics + assets</text>
+  <text x="392" y="255" text-anchor="middle" fill="#B3A89E" font-size="11">alpha overlays, b-roll</text>
+
+  <line x1="485" y1="240" x2="523" y2="240" stroke="#B3A89E" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- package -->
+  <rect x="530" y="212" width="150" height="56" rx="12" fill="#1B3358" stroke="#2A4068"/>
+  <text x="605" y="236" text-anchor="middle" fill="#F4EFEA" font-size="16" font-weight="600">package</text>
+  <text x="605" y="255" text-anchor="middle" fill="#B3A89E" font-size="11">titles, thumbs, chapters</text>
+
+  <line x1="680" y1="240" x2="718" y2="240" stroke="#B3A89E" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- you finish · gate 4 -->
+  <rect x="725" y="212" width="215" height="56" rx="12" fill="#122543" stroke="#B66D46" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="832" y="236" text-anchor="middle" fill="#F4EFEA" font-size="16" font-weight="600">you finish in your editor</text>
+  <text x="832" y="255" text-anchor="middle" fill="#C8824F" font-size="11" font-weight="700">GATE 4 · YOUR FINAL SAY</text>
+
+  <line x1="940" y1="240" x2="978" y2="240" stroke="#B3A89E" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- retro -->
+  <rect x="985" y="212" width="110" height="56" rx="12" fill="#1B3358" stroke="#2A4068"/>
+  <text x="1040" y="236" text-anchor="middle" fill="#F4EFEA" font-size="16" font-weight="600">retro</text>
+  <text x="1040" y="255" text-anchor="middle" fill="#B3A89E" font-size="11">your notes</text>
+
+  <!-- ══════════ compounding loop ══════════ -->
+
+  <path d="M 1040 268 C 1040 330, 900 345, 590 345 C 330 345, 210 330, 210 132" fill="none" stroke="#C8824F" stroke-width="1.5" stroke-dasharray="6 5" marker-end="url(#arrowCopper)"/>
+  <rect x="415" y="368" width="350" height="34" rx="17" fill="#122543" stroke="#9E5733"/>
+  <text x="590" y="390" text-anchor="middle" fill="#C8824F" font-size="13" font-weight="600">retro edits the pipeline's own files</text>
+  <text x="590" y="430" text-anchor="middle" fill="#B3A89E" font-size="13">voice bible · blacklist · format learnings · tool notes: the next video starts smarter</text>
+
+  <!-- legend -->
+  <rect x="30" y="24" width="12" height="12" rx="3" fill="#1B3358" stroke="#B66D46" stroke-width="1.5"/>
+  <text x="50" y="35" fill="#B3A89E" font-size="12">approval gate: hard stop, waits for you</text>
+  <rect x="330" y="24" width="12" height="12" rx="3" fill="#122543" stroke="#B3A89E" stroke-dasharray="4 3"/>
+  <text x="350" y="35" fill="#B3A89E" font-size="12">your part</text>
+</svg>
