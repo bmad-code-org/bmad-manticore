@@ -18,3 +18,11 @@ activation_steps_append = []
 # Persistent facts held for the whole run: literal sentences, or
 # "file:{project-root}/..." paths whose contents are loaded as facts.
 persistent_facts = []
+
+[wrap]
+
+# Path globs, relative to the project folder, that the wrap lane must
+# never list for reclaim (in addition to the built-in never-reclaim set:
+# source footage, transcripts, edl.json, cutplan, overlays, project.json,
+# and the published master).
+preserve = []

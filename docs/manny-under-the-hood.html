@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manny, under the hood</title>
+<style>
+  :root{
+    --ink:#1A1310; --ink-2:#221812; --ink-3:#2C201A;
+    --strip:#241B15; --frame:#2B211A; --frame-line:#4A3728;
+    --red:#E0522F; --amber:#E89A3C; --gold:#F2C36B;
+    --cream:#F5EBDC; --cream-dim:#B39B7F;
+    --line:rgba(242,195,107,.20);
+    --sprocket:20px;
+    --font:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{ background:var(--ink); color:var(--cream); font-family:var(--font); line-height:1.5; -webkit-font-smoothing:antialiased; overflow-x:hidden; }
+
+  body::before{ content:""; position:fixed; inset:0; z-index:60; pointer-events:none; opacity:.05; mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  body::after{ content:""; position:fixed; inset:0; z-index:59; pointer-events:none;
+    background:radial-gradient(120% 90% at 50% 42%, transparent 52%, rgba(0,0,0,.55) 100%); }
+
+  .rail{ position:fixed; top:0; bottom:0; width:var(--sprocket); z-index:40; pointer-events:none;
+    background:repeating-linear-gradient(to bottom, transparent 0 14px, rgba(0,0,0,.55) 14px 28px), linear-gradient(var(--ink-3), var(--ink-3)); }
+  .rail::before{ content:""; position:absolute; top:0; bottom:0; width:8px;
+    background:repeating-linear-gradient(to bottom, #0c0806 0 12px, var(--cream) 12px 20px, #0c0806 20px 30px); opacity:.85; border-radius:2px; }
+  .rail.left{ left:0; border-right:1px solid rgba(0,0,0,.6); } .rail.left::before{ left:6px; }
+  .rail.right{ right:0; border-left:1px solid rgba(0,0,0,.6); } .rail.right::before{ right:6px; }
+  @media (max-width:720px){ .rail{ display:none; } }
+
+  .deck{ height:100vh; overflow-y:scroll; overflow-x:hidden; scroll-snap-type:y mandatory; scroll-behavior:smooth; padding:0 var(--sprocket); }
+  @media (max-width:720px){ .deck{ padding:0; } }
+  .deck::-webkit-scrollbar{ width:0; height:0; }
+
+  .slide{ min-height:100vh; scroll-snap-align:start; scroll-snap-stop:always; display:flex; align-items:center; justify-content:center;
+    position:relative; padding:clamp(36px,6vh,60px) clamp(20px,5vw,76px); }
+  .inner{ width:100%; max-width:1180px; }
+
+  .kicker{ display:inline-block; font-size:12px; letter-spacing:.26em; text-transform:uppercase; color:var(--amber); font-weight:700;
+    padding:5px 12px; border:1px solid var(--line); border-radius:2px; margin-bottom:14px; }
+  h1{ font-size:clamp(38px,7vw,78px); line-height:1.02; font-weight:800; letter-spacing:-.02em;
+    background:linear-gradient(100deg, var(--gold), var(--amber) 45%, var(--red)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  h2{ font-size:clamp(26px,3.8vw,44px); line-height:1.06; font-weight:800; letter-spacing:-.015em; }
+  h2 .accent{ color:var(--amber); }
+  .sub{ color:var(--cream-dim); font-size:clamp(14px,1.6vw,18px); margin-top:10px; max-width:64ch; }
+
+  /* Manny badge, on every slide */
+  .manny-badge{ width:64px; height:64px; border-radius:50%; overflow:hidden; flex:0 0 auto; border:2px solid var(--gold); position:relative;
+    box-shadow:0 8px 22px rgba(0,0,0,.55), 0 0 0 4px var(--ink-3); }
+  .manny-badge img{ width:100%; height:100%; object-fit:cover; object-position:50% 36%; display:block; }
+  .manny-badge::after{ content:""; position:absolute; inset:0; border-radius:50%; box-shadow:inset 0 0 14px rgba(0,0,0,.5); }
+  @media (max-width:560px){ .manny-badge{ width:50px; height:50px; } }
+
+  .uh-head{ display:flex; align-items:center; gap:18px; margin-bottom:clamp(14px,2.4vh,24px); }
+  .uh-head .txt .kicker{ margin-bottom:10px; }
+
+  /* Title + closing hero image */
+  .split{ display:grid; grid-template-columns:1.1fr .9fr; gap:clamp(24px,4vw,54px); align-items:center; }
+  @media (max-width:900px){ .split{ grid-template-columns:1fr; } }
+  .hero-cell{ position:relative; border-radius:6px; overflow:hidden; aspect-ratio:16/11; max-height:74vh; background:#120c09;
+    border:1px solid var(--line); box-shadow:0 30px 80px rgba(0,0,0,.6); }
+  @media (max-height:760px){ .hero-cell{ max-height:64vh; } }
+  .hero-cell img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .hero-cell::after{ content:""; position:absolute; inset:0; background:linear-gradient(180deg, transparent 55%, rgba(20,12,8,.6)); }
+  .frame-corners::before, .frame-corners::after{ content:""; position:absolute; width:26px; height:26px; z-index:2; border:2px solid var(--gold); opacity:.8; }
+  .frame-corners::before{ top:12px; left:12px; border-right:0; border-bottom:0; }
+  .frame-corners::after{ bottom:12px; right:12px; border-left:0; border-top:0; }
+  .tagline{ font-size:clamp(16px,2vw,22px); color:var(--cream); margin-top:20px; max-width:30ch; font-weight:500; }
+  .byline{ color:var(--cream-dim); margin-top:18px; font-size:14.5px; max-width:44ch; }
+
+  /* Film-strip flow diagrams */
+  .filmflow{ width:100%; overflow-x:auto; margin-top:clamp(8px,1.6vh,16px); }
+  .filmflow::-webkit-scrollbar{ height:8px; } .filmflow::-webkit-scrollbar-thumb{ background:var(--ink-3); border-radius:4px; }
+  .filmflow svg{ width:100%; height:auto; display:block; min-width:720px; }
+  .flow-cap{ font-size:13px; color:var(--cream-dim); margin-top:14px; line-height:1.5; }
+  .flow-cap b{ color:var(--gold); font-weight:700; }
+  .legend{ display:flex; flex-wrap:wrap; gap:16px; margin-top:12px; font-size:12px; color:var(--cream-dim); align-items:center; }
+  .legend .k{ display:inline-flex; align-items:center; gap:7px; }
+  .legend .sw{ width:14px; height:14px; border-radius:3px; }
+
+  /* Roster / card grids */
+  .roster{ display:grid; grid-template-columns:repeat(3,1fr); gap:13px; }
+  @media (max-width:860px){ .roster{ grid-template-columns:1fr 1fr; } }
+  @media (max-width:560px){ .roster{ grid-template-columns:1fr; } }
+  .rcard{ background:var(--ink-2); border:1px solid var(--line); border-radius:6px; padding:13px 14px 14px; position:relative; overflow:hidden; }
+  .rcard::before{ content:""; position:absolute; top:0; left:0; right:0; height:7px;
+    background:repeating-linear-gradient(to right, transparent 0 9px, rgba(0,0,0,.5) 9px 15px); background-color:var(--ink-3); }
+  .rcard .rhead{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:8px; margin-bottom:7px; }
+  .rcard h3{ font-size:14.5px; color:var(--cream); font-weight:700; }
+  .rcard p{ font-size:12.5px; color:var(--cream-dim); line-height:1.42; }
+  .rcard p b{ color:var(--cream); font-weight:600; }
+  .chip{ font-size:9.5px; letter-spacing:.1em; text-transform:uppercase; font-weight:800; padding:3px 8px; border-radius:3px; white-space:nowrap; flex:0 0 auto; }
+  .chip.work{ background:var(--amber); color:var(--ink); }
+  .chip.opt{ color:var(--gold); border:1px solid var(--gold); }
+  .chip.plan{ color:var(--cream-dim); border:1px dashed var(--cream-dim); }
+
+  /* Generic two/three column note cards */
+  .cards{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-top:6px; }
+  @media (max-width:860px){ .cards{ grid-template-columns:1fr; } }
+  .card{ background:var(--ink-2); border:1px solid var(--line); border-radius:6px; padding:16px 16px 18px; position:relative; }
+  .card.gate{ border-left:3px solid var(--red); }
+  .card h3{ font-size:15.5px; color:var(--gold); margin-bottom:10px; }
+  .card ul{ list-style:none; display:grid; gap:8px; }
+  .card li{ font-size:13px; color:var(--cream-dim); padding-left:16px; position:relative; line-height:1.44; }
+  .card li::before{ content:""; position:absolute; left:2px; top:8px; width:6px; height:6px; border-radius:50%; background:var(--amber); }
+  .card li b{ color:var(--cream); font-weight:700; }
+  .card.danger li::before{ background:var(--red); }
+
+  /* Beat table */
+  .betable{ width:100%; overflow-x:auto; margin-top:8px; border:1px solid var(--line); border-radius:6px; }
+  table.beat{ width:100%; border-collapse:collapse; font-size:12.5px; min-width:640px; }
+  table.beat th{ background:var(--ink-3); color:var(--gold); font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; text-align:left; padding:9px 12px; font-weight:800; }
+  table.beat td{ padding:9px 12px; border-top:1px solid var(--line); color:var(--cream-dim); }
+  table.beat td b{ color:var(--cream); font-weight:600; }
+  table.beat .t{ color:var(--amber); font-family:var(--mono); font-size:11.5px; }
+  .enginerow{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:16px; }
+  @media (max-width:860px){ .enginerow{ grid-template-columns:1fr 1fr; } }
+  .eng{ background:var(--ink-2); border:1px solid var(--line); border-radius:5px; padding:12px 13px; }
+  .eng h4{ font-size:13.5px; color:var(--cream); margin-bottom:5px; }
+  .eng p{ font-size:12px; color:var(--cream-dim); line-height:1.4; }
+
+  /* code + links */
+  .cmd{ background:#0f0a07; border:1px solid var(--line); border-radius:6px; padding:15px 17px; margin:18px 0; overflow-x:auto; }
+  .cmd .lab{ font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--amber); font-weight:700; display:block; margin-bottom:8px; }
+  .cmd code{ font-family:var(--mono); font-size:14px; color:var(--gold); white-space:nowrap; }
+  .then{ font-size:clamp(17px,2.3vw,25px); font-weight:700; margin:4px 0; }
+  .then .accent{ color:var(--amber); }
+  .links{ display:flex; flex-wrap:wrap; gap:11px; margin-top:20px; }
+  .links a{ text-decoration:none; color:var(--cream); font-size:14px; font-weight:600; background:var(--ink-3); border:1px solid var(--line); border-radius:999px; padding:9px 18px; transition:border-color .2s,color .2s; }
+  .links a:hover{ border-color:var(--gold); color:var(--gold); }
+
+  /* fixed chrome */
+  .counter{ position:fixed; left:calc(var(--sprocket) + 22px); top:20px; z-index:50; font-size:12px; letter-spacing:.2em; color:var(--cream-dim); font-weight:700; }
+  .counter b{ color:var(--gold); }
+  .brandtag{ position:fixed; right:calc(var(--sprocket) + 22px); top:20px; z-index:50; font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:var(--amber); font-weight:700; }
+  @media (max-width:720px){ .counter{ left:16px; } .brandtag{ display:none; } }
+  .dots{ position:fixed; right:calc(var(--sprocket) + 16px); top:50%; transform:translateY(-50%); z-index:50; display:flex; flex-direction:column; gap:10px; }
+  @media (max-width:720px){ .dots{ right:8px; } }
+  .dots button{ width:9px; height:9px; border-radius:50%; border:1px solid var(--amber); background:transparent; cursor:pointer; padding:0; transition:all .2s; }
+  .dots button.active{ background:var(--gold); border-color:var(--gold); transform:scale(1.35); box-shadow:0 0 10px rgba(242,195,107,.6); }
+  .arrows{ position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:50; display:flex; gap:12px; align-items:center; }
+  .arrows button{ width:42px; height:42px; border-radius:50%; cursor:pointer; background:var(--ink-3); border:1px solid var(--line); color:var(--gold); font-size:18px; display:flex; align-items:center; justify-content:center; transition:all .2s; }
+  .arrows button:hover{ border-color:var(--gold); background:#3a2a1f; }
+  .arrows button:disabled{ opacity:.3; cursor:default; }
+  .hint{ font-size:11px; color:var(--cream-dim); letter-spacing:.1em; }
+  @media (max-width:720px){ .hint{ display:none; } }
+</style>
+</head>
+<body>
+
+<!-- shared film-strip defs, referenced by every flow SVG -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L9 5L0 9z" fill="#B39B7F"/></marker>
+  <marker id="ahA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L9 5L0 9z" fill="#E89A3C"/></marker>
+  <marker id="ahR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L9 5L0 9z" fill="#E0522F"/></marker>
+  <pattern id="spr" width="26" height="10" patternUnits="userSpaceOnUse"><rect width="26" height="10" fill="#120D0A"/><rect x="7" y="2.5" width="12" height="5" rx="2" fill="#2E2119"/></pattern>
+</defs></svg>
+
+<div class="rail left" aria-hidden="true"></div>
+<div class="rail right" aria-hidden="true"></div>
+
+<div class="counter"><b id="cnum">01</b> / 10</div>
+<div class="brandtag">Under the hood</div>
+
+<nav class="dots" id="dots" aria-label="Slide navigation"></nav>
+<div class="arrows">
+  <button id="prev" aria-label="Previous slide">&#8249;</button>
+  <span class="hint">arrow keys</span>
+  <button id="next" aria-label="Next slide">&#8250;</button>
+</div>
+
+<main class="deck" id="deck">
+
+  <!-- 1. TITLE -->
+  <section class="slide" data-name="Title">
+    <div class="inner split">
+      <div>
+        <span class="kicker">The machinery behind the magic</span>
+        <h1>Manny,<br>under the hood</h1>
+        <p class="tagline">The tools, the scripts, and the film strip that turn talking into a finished video.</p>
+        <p class="byline">Taste lives in files. Mechanics live in scripts, run through uv. Skills are thin routers between them, so smaller models can drive the pipeline and it gets cheaper over time without getting worse.</p>
+      </div>
+      <div class="hero-cell frame-corners">
+        <img src="assets/manny/banner-03-headon-lensflare.jpg" alt="Manny the Manticore diving head-on over a waterfall through a red sunset lens flare">
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. ARCHITECTURE -->
+  <section class="slide" data-name="Architecture">
+    <div class="inner">
+      <div class="uh-head">
+        <span class="manny-badge"><img src="assets/manny/feature-02-director-closeup.jpg" alt="Close portrait of Manny the Manticore"></span>
+        <div class="txt">
+          <span class="kicker">Architecture</span>
+          <h2>One stage, <span class="accent">every time</span></h2>
+        </div>
+      </div>
+      <p class="sub">Every stage skill runs the same loop, no creativity in the mechanics. It loads config, reads state, runs a script, checks a checklist, writes the artifact, and stops dead at a gate.</p>
+      <div class="filmflow">
+        <svg viewBox="0 0 1332 176" role="img" aria-label="The stage-skill loop as a film strip: resolve config, read project.json, run the uv script, run the checklist, write the artifact, then stop at a gate or advance">
+          <rect x="8" y="16" width="1316" height="150" rx="8" fill="#241B15" stroke="#3B2C20"/>
+          <rect x="8" y="20" width="1316" height="10" fill="url(#spr)"/>
+          <rect x="8" y="152" width="1316" height="10" fill="url(#spr)"/>
+          <!-- 1 -->
+          <rect x="24" y="42" width="188" height="104" rx="6" fill="#2B211A" stroke="#4A3728"/>
+          <text x="118" y="80" text-anchor="middle" fill="#F5EBDC" font-size="15" font-weight="600">resolve config</text>
+          <text x="118" y="100" text-anchor="middle" fill="#B39B7F" font-size="11">[modules.manticore]</text>
+          <text x="118" y="114" text-anchor="middle" fill="#B39B7F" font-size="11">+ per-skill customize</text>
+          <line x1="214" y1="94" x2="238" y2="94" stroke="#B39B7F" stroke-width="1.5" marker-end="url(#ah)"/>
+          <!-- 2 -->
+          <rect x="240" y="42" width="188" height="104" rx="6" fill="#2B211A" stroke="#4A3728"/>
+          <text x="334" y="80" text-anchor="middle" fill="#F5EBDC" font-size="15" font-weight="600">read project.json</text>
+          <text x="334" y="100" text-anchor="middle" fill="#B39B7F" font-size="11">stage, stages_done,</text>
+          <text x="334" y="114" text-anchor="middle" fill="#B39B7F" font-size="11">approvals, artifacts</text>
+          <line x1="430" y1="94" x2="454" y2="94" stroke="#B39B7F" stroke-width="1.5" marker-end="url(#ah)"/>
+          <!-- 3 -->
+          <rect x="456" y="42" width="188" height="104" rx="6" fill="#2B211A" stroke="#4A3728"/>
+          <text x="550" y="80" text-anchor="middle" fill="#F5EBDC" font-size="15" font-weight="600">run the script</text>
+          <text x="550" y="100" text-anchor="middle" fill="#F2C36B" font-size="11">uv run ...py</text>
+          <text x="550" y="114" text-anchor="middle" fill="#B39B7F" font-size="11">the mechanical work</text>
+          <line x1="646" y1="94" x2="670" y2="94" stroke="#B39B7F" stroke-width="1.5" marker-end="url(#ah)"/>
+          <!-- 4 -->
+          <rect x="672" y="42" width="188" height="104" rx="6" fill="#2B211A" stroke="#4A3728"/>
+          <text x="766" y="80" text-anchor="middle" fill="#F5EBDC" font-size="15" font-weight="600">run the checklist</text>
+          <text x="766" y="100" text-anchor="middle" fill="#B39B7F" font-size="11">fix failures before</text>
+          <text x="766" y="114" text-anchor="middle" fill="#B39B7F" font-size="11">anyone sees it</text>
+          <line x1="862" y1="94" x2="886" y2="94" stroke="#B39B7F" stroke-width="1.5" marker-end="url(#ah)"/>
+          <!-- 5 -->
+          <rect x="888" y="42" width="188" height="104" rx="6" fill="#2B211A" stroke="#4A3728"/>
+          <text x="982" y="80" text-anchor="middle" fill="#F5EBDC" font-size="15" font-weight="600">write the artifact</text>
+          <text x="982" y="100" text-anchor="middle" fill="#B39B7F" font-size="11">to the project folder,</text>
+          <text x="982" y="114" text-anchor="middle" fill="#B39B7F" font-size="11">update project.json</text>
+          <line x1="1078" y1="94" x2="1102" y2="94" stroke="#E0522F" stroke-width="1.5" marker-end="url(#ahR)"/>
+          <!-- 6 gate -->
+          <rect x="1104" y="42" width="188" height="104" rx="6" fill="#2B211A" stroke="#E0522F" stroke-width="2"/>
+          <text x="1198" y="78" text-anchor="middle" fill="#F5EBDC" font-size="15" font-weight="600">gate? stop.</text>
+          <text x="1198" y="98" text-anchor="middle" fill="#E0522F" font-size="11" font-weight="700">HARD STOP</text>
+          <text x="1198" y="114" text-anchor="middle" fill="#B39B7F" font-size="11">else advance stage</text>
+        </svg>
+      </div>
+      <p class="flow-cap">The studio config layers three ways: packaged defaults, then <b>team</b> overrides, then <b>personal</b> ones. The four gates (outline, cutplan, beats, final) are the only places a stage stops, and only your explicit say-so moves one from pending to a date.</p>
+    </div>
+  </section>
+
+  <!-- 3. TOOL + MODEL ROSTER -->
+  <section class="slide" data-name="Tool roster">
+    <div class="inner">
+      <div class="uh-head">
+        <span class="manny-badge"><img src="assets/manny/banner-01-flight-filmribbon.jpg" alt="Manny the Manticore in flight trailing a film strip"></span>
+        <div class="txt">
+          <span class="kicker">The roster</span>
+          <h2>The tools and models <span class="accent">behind each stage</span></h2>
+        </div>
+      </div>
+      <div class="legend">
+        <span class="k"><span class="sw" style="background:var(--amber)"></span> working in 1.0</span>
+        <span class="k"><span class="sw" style="border:1px solid var(--gold)"></span> opt-in: your own subscription CLI, chosen at setup</span>
+        <span class="k"><span class="sw" style="border:1px dashed var(--cream-dim)"></span> planned: not in 1.0, see the roadmap</span>
+      </div>
+      <div class="roster" style="margin-top:14px;">
+        <div class="rcard">
+          <div class="rhead"><h3>Transcription</h3><span class="chip work">working</span></div>
+          <p><b>parakeet-mlx</b>: word-level, keeps the "um"s verbatim, free and local on Apple Silicon. deepgram-nova3 and elevenlabs-scribe sit behind the same switch as opt-in lanes.</p>
+        </div>
+        <div class="rcard">
+          <div class="rhead"><h3>Image + video gen</h3><span class="chip opt">opt-in</span></div>
+          <p>Driven through <b>your registered CLIs</b>: Grok Imagine (image + video), Google agy for Gemini stills and Veo clips, Codex gpt-image for accurate text. Metered xAI / Veo APIs are planned opt-in.</p>
+        </div>
+        <div class="rcard">
+          <div class="rhead"><h3>You, in the frame</h3><span class="chip work">working</span></div>
+          <p>Approved headshots go straight to your image model: <b>"use the person in this image to ..."</b>. Tweaks restart from the original photo with a sharper prompt, never from a previous generation.</p>
+        </div>
+        <div class="rcard">
+          <div class="rhead"><h3>Rendering</h3><span class="chip work">working</span></div>
+          <p><b>ffmpeg</b> with hardware encode (videotoolbox on macOS, libx264 fallback), segment-parallel, disk-preflighted.</p>
+        </div>
+        <div class="rcard">
+          <div class="rhead"><h3>Graphics render</h3><span class="chip work">working</span></div>
+          <p><b>Playwright</b> headless Chromium renders HTML to exact-size pixels, with alpha verification, for the HTML graphics lane.</p>
+        </div>
+        <div class="rcard">
+          <div class="rhead"><h3>Motion engines</h3><span class="chip work">working</span></div>
+          <p><b>HyperFrames</b> and <b>Remotion</b> for overlay beats and stingers, <b>OGraf</b> for editable broadcast graphics. Themed through tokens.json.</p>
+        </div>
+        <div class="rcard">
+          <div class="rhead"><h3>Look development</h3><span class="chip work">working</span></div>
+          <p>Any capable design model authors bespoke looks in the design-prompting loop; <b>Claude</b> is the worked example. Taste it produces lands in files.</p>
+        </div>
+        <div class="rcard">
+          <div class="rhead"><h3>Voice corpus</h3><span class="chip work">working</span></div>
+          <p><b>yt-dlp</b> pulls your published transcripts so the guided voice bible is built from how you actually talk, with cited examples.</p>
+        </div>
+        <div class="rcard">
+          <div class="rhead"><h3>Audio: TTS, SFX, music</h3><span class="chip work">working</span></div>
+          <p>The mc-audio skill farms sound locally: <b>Kokoro-82M</b> narration and two-host dialogue, <b>MusicGen-small</b> beds, <b>AudioLDM2</b> SFX. Full songs with vocals are the planned lane (ACE-Step, unvalidated); ElevenLabs stays opt-in.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. FLOW: spoken idea to script to re-record -->
+  <section class="slide" data-name="Idea to script">
+    <div class="inner">
+      <div class="uh-head">
+        <span class="manny-badge"><img src="assets/manny/banner-04-banking-swirl.jpg" alt="Manny the Manticore banking as film frames swirl"></span>
+        <div class="txt">
+          <span class="kicker">Flow &nbsp;&middot;&nbsp; the writing lane</span>
+          <h2>Spoken idea to script <span class="accent">to re-record</span></h2>
+        </div>
+      </div>
+      <div class="filmflow">
+        <svg viewBox="0 0 1332 176" role="img" aria-label="The writing lane as a film strip: talk it out loud, local speech-to-text captures your words verbatim, outline gate 1, script woven from your phrasing, you re-record clean takes, into the cut">
+          <rect x="8" y="16" width="1316" height="150" rx="8" fill="#241B15" stroke="#3B2C20"/>
+          <rect x="8" y="20" width="1316" height="10" fill="url(#spr)"/>
+          <rect x="8" y="152" width="1316" height="10" fill="url(#spr)"/>
+          <!-- talk -->
+          <rect x="22" y="42" width="196" height="104" rx="6" fill="#191210" stroke="#B39B7F" stroke-dasharray="5 4"/>
+          <text x="120" y="78" text-anchor="middle" fill="#F5EBDC" font-size="15" font-weight="600">talk it out loud</text>
+          <text x="120" y="98" text-anchor="middle" fill="#B39B7F" font-size="11">your part; camera</text>
+          <text x="120" y="112" text-anchor="middle" fill="#B39B7F" font-size="11">rolling if you like</text>
+          <line x1="220" y1="94" x2="242" y2="94" stroke="#B39B7F" stroke-width="1.5" marker-end="url(#ah)"/>
+          <!-- STT -->
+          <rect x="244" y="42" width="196" height="104" rx="6" fill="#2B211A" stroke="#4A3728"/>
+          <text x="342" y="78" text-anchor="middle" fill="#F5EBDC" font-size="15" font-weight="600">local STT</text>
+          <text x="342" y="98" text-anchor="middle" fill="#B39B7F" font-size="11">your exact words,</text>
+          <text x="342" y="112" text-anchor="middle" fill="#F2C36B" font-size="11">verbatim, captured</text>
+          <line x1="442" y1="94" x2="464" y2="94" stroke="#E0522F" stroke-width="1.5" marker-end="url(#ahR)"/>
+          <!-- outline gate 1 -->
+          <rect x="466" y="42" width="196" height="104" rx="6" fill="#2B211A" stroke="#E0522F" stroke-width="2"/>
+          <text x="564" y="76" text-anchor="middle" fill="#F5EBDC" font-size="15" font-weight="600">outline</text>
+          <text x="564" y="96" text-anchor="middle" fill="#E0522F" font-size="11" font-weight="700">GATE 1</text>
+          <text x="564" y="112" text-anchor="middle" fill="#B39B7F" font-size="11">hook + packaging promise</text>
+          <line x1="662" y1="94" x2="684" y2="94" stroke="#B39B7F" stroke-width="1.5" marker-end="url(#ah)"/>
+          <!-- script -->
+          <rect x="686" y="42" width="196" height="104" rx="6" fill="#2B211A" stroke="#4A3728"/>
+          <text x="784" y="76" text-anchor="middle" fill="#F5EBDC" font-size="15" font-weight="600">script</text>
+          <text x="784" y="96" text-anchor="middle" fill="#B39B7F" font-size="11">only your phrasing,</text>
+          <text x="784" y="110" text-anchor="middle" fill="#B39B7F" font-size="11">quote-or-cut, blacklist lint</text>
+          <line x1="882" y1="94" x2="904" y2="94" stroke="#B39B7F" stroke-width="1.5" marker-end="url(#ah)"/>
+          <!-- re-record -->
+          <rect x="906" y="42" width="196" height="104" rx="6" fill="#191210" stroke="#B39B7F" stroke-dasharray="5 4"/>
+          <text x="1004" y="76" text-anchor="middle" fill="#F5EBDC" font-size="15" font-weight="600">you re-record</text>
+          <text x="1004" y="96" text-anchor="middle" fill="#B39B7F" font-size="11">clean takes, reading</text>
+          <text x="1004" y="110" text-anchor="middle" fill="#B39B7F" font-size="11">your own words back</text>
+          <line x1="1102" y1="94" x2="1124" y2="94" stroke="#B39B7F" stroke-width="1.5" marker-end="url(#ah)"/>
+          <!-- into cut -->
+          <rect x="1126" y="42" width="182" height="104" rx="6" fill="#2B211A" stroke="#4A3728"/>
+          <text x="1217" y="84" text-anchor="middle" fill="#F5EBDC" font-size="15" font-weight="600">into the cut</text>
+          <text x="1217" y="104" text-anchor="middle" fill="#B39B7F" font-size="11">reel 2 begins</text>
+        </svg>
+      </div>
+      <p class="flow-cap"><b>The interview-recording trick:</b> answer the brain-dump questions on camera, each prefixed with the cue "question from the interviewer", and the cut stage segments it mechanically. The interview itself becomes usable footage, not just notes.</p>
+    </div>
+  </section>
+
+  <!-- 5. FLOW: raw footage to awesome -->
+  <section class="slide" data-name="Footage to cut">
+    <div class="inner">
+      <div class="uh-head">
+        <span class="manny-badge"><img src="assets/manny/feature-01-rearing-hero.jpg" alt="Manny the Manticore rearing on a clifftop"></span>
+        <div class="txt">
+          <span class="kicker">Flow &nbsp;&middot;&nbsp; the edit lane</span>
+          <h2>Raw footage <span class="accent">to awesome</span></h2>
+        </div>
+      </div>
+      <div class="filmflow">
+        <svg viewBox="0 0 1336 176" role="img" aria-label="The edit lane as a film strip: ingest-first project, VFR to CFR preflight, transcribe, cutplan detectors, gate 2 cut with a preview render every iteration, gate 3 beats and CTAs, graphics composited preview, gate 4 offered final render">
+          <rect x="6" y="16" width="1324" height="150" rx="8" fill="#241B15" stroke="#3B2C20"/>
+          <rect x="6" y="20" width="1324" height="10" fill="url(#spr)"/>
+          <rect x="6" y="152" width="1324" height="10" fill="url(#spr)"/>
+          <!-- 1 ingest -->
+          <rect x="20" y="42" width="150" height="104" rx="6" fill="#191210" stroke="#E89A3C" stroke-dasharray="5 4"/>
+          <text x="95" y="80" text-anchor="middle" fill="#F2C36B" font-size="13" font-weight="600">ingest-first</text>
+          <text x="95" y="98" text-anchor="middle" fill="#B39B7F" font-size="10">source registered,</text>
+          <text x="95" y="110" text-anchor="middle" fill="#B39B7F" font-size="10">writing skipped</text>
+          <line x1="170" y1="94" x2="182" y2="94" stroke="#B39B7F" stroke-width="1.3" marker-end="url(#ah)"/>
+          <!-- 2 preflight -->
+          <rect x="184" y="42" width="150" height="104" rx="6" fill="#2B211A" stroke="#4A3728"/>
+          <text x="259" y="80" text-anchor="middle" fill="#F5EBDC" font-size="13" font-weight="600">preflight</text>
+          <text x="259" y="98" text-anchor="middle" fill="#B39B7F" font-size="10">VFR to CFR, disk</text>
+          <text x="259" y="110" text-anchor="middle" fill="#B39B7F" font-size="10">+ edge QC frames</text>
+          <line x1="334" y1="94" x2="346" y2="94" stroke="#B39B7F" stroke-width="1.3" marker-end="url(#ah)"/>
+          <!-- 3 transcribe -->
+          <rect x="348" y="42" width="150" height="104" rx="6" fill="#2B211A" stroke="#4A3728"/>
+          <text x="423" y="80" text-anchor="middle" fill="#F5EBDC" font-size="13" font-weight="600">transcribe</text>
+          <text x="423" y="98" text-anchor="middle" fill="#B39B7F" font-size="10">word-level,</text>
+          <text x="423" y="110" text-anchor="middle" fill="#B39B7F" font-size="10">fillers kept</text>
+          <line x1="498" y1="94" x2="510" y2="94" stroke="#B39B7F" stroke-width="1.3" marker-end="url(#ah)"/>
+          <!-- 4 detectors -->
+          <rect x="512" y="42" width="150" height="104" rx="6" fill="#2B211A" stroke="#4A3728"/>
+          <text x="587" y="76" text-anchor="middle" fill="#F5EBDC" font-size="13" font-weight="600">detectors</text>
+          <text x="587" y="94" text-anchor="middle" fill="#B39B7F" font-size="10">silence, filler,</text>
+          <text x="587" y="106" text-anchor="middle" fill="#B39B7F" font-size="10">stutter, retake,</text>
+          <text x="587" y="118" text-anchor="middle" fill="#B39B7F" font-size="10">spoken markers</text>
+          <line x1="662" y1="94" x2="674" y2="94" stroke="#E0522F" stroke-width="1.3" marker-end="url(#ahR)"/>
+          <!-- 5 cut gate 2 -->
+          <rect x="676" y="42" width="150" height="104" rx="6" fill="#2B211A" stroke="#E0522F" stroke-width="2"/>
+          <text x="751" y="74" text-anchor="middle" fill="#F5EBDC" font-size="13" font-weight="600">cut</text>
+          <text x="751" y="92" text-anchor="middle" fill="#E0522F" font-size="10.5" font-weight="700">GATE 2</text>
+          <text x="751" y="108" text-anchor="middle" fill="#F2C36B" font-size="10">preview render,</text>
+          <text x="751" y="120" text-anchor="middle" fill="#F2C36B" font-size="10">every iteration</text>
+          <line x1="826" y1="94" x2="838" y2="94" stroke="#E0522F" stroke-width="1.3" marker-end="url(#ahR)"/>
+          <!-- 6 beats gate 3 -->
+          <rect x="840" y="42" width="150" height="104" rx="6" fill="#2B211A" stroke="#E0522F" stroke-width="2"/>
+          <text x="915" y="74" text-anchor="middle" fill="#F5EBDC" font-size="13" font-weight="600">beats</text>
+          <text x="915" y="92" text-anchor="middle" fill="#E0522F" font-size="10.5" font-weight="700">GATE 3</text>
+          <text x="915" y="108" text-anchor="middle" fill="#B39B7F" font-size="10">CTAs placed per</text>
+          <text x="915" y="120" text-anchor="middle" fill="#B39B7F" font-size="10">your bible</text>
+          <line x1="990" y1="94" x2="1002" y2="94" stroke="#B39B7F" stroke-width="1.3" marker-end="url(#ah)"/>
+          <!-- 7 graphics composite -->
+          <rect x="1004" y="42" width="150" height="104" rx="6" fill="#2B211A" stroke="#4A3728"/>
+          <text x="1079" y="76" text-anchor="middle" fill="#F5EBDC" font-size="13" font-weight="600">graphics</text>
+          <text x="1079" y="94" text-anchor="middle" fill="#B39B7F" font-size="10">alpha overlays,</text>
+          <text x="1079" y="106" text-anchor="middle" fill="#B39B7F" font-size="10">composited</text>
+          <text x="1079" y="118" text-anchor="middle" fill="#B39B7F" font-size="10">preview</text>
+          <line x1="1154" y1="94" x2="1166" y2="94" stroke="#E0522F" stroke-width="1.3" marker-end="url(#ahR)"/>
+          <!-- 8 final gate 4 -->
+          <rect x="1168" y="42" width="150" height="104" rx="6" fill="#2B211A" stroke="#E0522F" stroke-width="2"/>
+          <text x="1243" y="76" text-anchor="middle" fill="#F5EBDC" font-size="13" font-weight="600">final</text>
+          <text x="1243" y="94" text-anchor="middle" fill="#E0522F" font-size="10.5" font-weight="700">GATE 4</text>
+          <text x="1243" y="110" text-anchor="middle" fill="#F2C36B" font-size="10">final render</text>
+          <text x="1243" y="122" text-anchor="middle" fill="#F2C36B" font-size="10">offered</text>
+        </svg>
+      </div>
+      <p class="flow-cap">Footage-first projects (a livestream VOD, a recorded talk, raw takes) enter at the cut and run the same gates from there. The <b>editor timeline</b> (edl.json, cutplan.md, FCPXML) is written alongside every iteration, so you can finish in your own editor at any step.</p>
+    </div>
+  </section>
+
+  <!-- 6. VOICE + FILLER GENERATION -->
+  <section class="slide" data-name="Generation, honestly">
+    <div class="inner">
+      <div class="uh-head">
+        <span class="manny-badge"><img src="assets/manny/banner-02-clifftop-clapperboard.jpg" alt="Manny the Manticore on a clifftop clapperboard rock"></span>
+        <div class="txt">
+          <span class="kicker">Generation, honestly</span>
+          <h2>Where synthesis fits, <span class="accent">and where it must not</span></h2>
+        </div>
+      </div>
+      <div class="cards">
+        <div class="card">
+          <h3>Voice + sound (mc-audio)</h3>
+          <ul>
+            <li>Local and free: <b>Kokoro-82M</b> narration and two-host dialogue, <b>MusicGen</b> beds, <b>AudioLDM2</b> whooshes and chimes</li>
+            <li>Honest limits, always stated: <b>stock voices, no cloning</b>; narration in YOUR voice means recording it</li>
+            <li>Songs with vocals: planned (<b>ACE-Step</b>), never promised until validated</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Generated b-roll</h3>
+          <ul>
+            <li>Atmosphere and story-beat clips through <b>your configured lanes</b>, today</li>
+            <li>Real verified imagery is preferred first; generation fills only what does not exist</li>
+            <li>A hand-built text card is the last resort, not the first</li>
+          </ul>
+        </div>
+        <div class="card danger">
+          <h3>The hard safety rules</h3>
+          <ul>
+            <li>Generated footage <b>never depicts UI</b> or text that must read correctly; that comes from screen recordings</li>
+            <li><b>Never chain generative edits</b>: a revision of a revision degrades like a photocopy of a photocopy</li>
+            <li>Every tweak starts clean: <b>all the original assets again</b>, one improved prompt</li>
+          </ul>
+        </div>
+      </div>
+      <p class="flow-cap">Small deterministic fixes (a logo swap, one wrong line, a color correction) are composited programmatically with ffmpeg or rsvg, never regenerated. No metered lane ever runs without your explicit setup choice.</p>
+    </div>
+  </section>
+
+  <!-- 7. RENDER PIPELINE -->
+  <section class="slide" data-name="Render pipeline">
+    <div class="inner">
+      <div class="uh-head">
+        <span class="manny-badge"><img src="assets/manny/banner-03-headon-lensflare.jpg" alt="Manny the Manticore diving head-on through a lens flare"></span>
+        <div class="txt">
+          <span class="kicker">The render pipeline</span>
+          <h2>One EDL, <span class="accent">two renders, every editor</span></h2>
+        </div>
+      </div>
+      <div class="filmflow">
+        <svg viewBox="0 0 1240 176" role="img" aria-label="Render pipeline as a film strip: edl.json is the neutral source of truth, composite core is shared, producing the preview render and the offered final render">
+          <rect x="8" y="16" width="1224" height="150" rx="8" fill="#241B15" stroke="#3B2C20"/>
+          <rect x="8" y="20" width="1224" height="10" fill="url(#spr)"/>
+          <rect x="8" y="152" width="1224" height="10" fill="url(#spr)"/>
+          <!-- edl -->
+          <rect x="24" y="42" width="252" height="104" rx="6" fill="#2B211A" stroke="#F2C36B" stroke-width="1.5"/>
+          <text x="150" y="80" text-anchor="middle" fill="#F5EBDC" font-size="16" font-weight="600">edl.json</text>
+          <text x="150" y="100" text-anchor="middle" fill="#F2C36B" font-size="11">the neutral source of truth</text>
+          <text x="150" y="114" text-anchor="middle" fill="#B39B7F" font-size="11">segments, quotes, reasons</text>
+          <line x1="276" y1="94" x2="300" y2="94" stroke="#B39B7F" stroke-width="1.5" marker-end="url(#ah)"/>
+          <!-- composite core -->
+          <rect x="302" y="42" width="252" height="104" rx="6" fill="#2B211A" stroke="#4A3728"/>
+          <text x="428" y="80" text-anchor="middle" fill="#F5EBDC" font-size="16" font-weight="600">composite_core</text>
+          <text x="428" y="100" text-anchor="middle" fill="#B39B7F" font-size="11">shared by both renders:</text>
+          <text x="428" y="114" text-anchor="middle" fill="#B39B7F" font-size="11">30ms fades, boundary verify</text>
+          <line x1="554" y1="94" x2="578" y2="94" stroke="#B39B7F" stroke-width="1.5" marker-end="url(#ah)"/>
+          <!-- preview -->
+          <rect x="580" y="42" width="252" height="104" rx="6" fill="#2B211A" stroke="#4A3728"/>
+          <text x="706" y="80" text-anchor="middle" fill="#F5EBDC" font-size="16" font-weight="600">preview render</text>
+          <text x="706" y="100" text-anchor="middle" fill="#B39B7F" font-size="11">720p CRF 28, fast,</text>
+          <text x="706" y="114" text-anchor="middle" fill="#B39B7F" font-size="11">every iteration</text>
+          <line x1="832" y1="94" x2="856" y2="94" stroke="#E0522F" stroke-width="1.5" marker-end="url(#ahR)"/>
+          <!-- final -->
+          <rect x="858" y="42" width="252" height="104" rx="6" fill="#2B211A" stroke="#E0522F" stroke-width="2"/>
+          <text x="984" y="76" text-anchor="middle" fill="#F5EBDC" font-size="16" font-weight="600">final render</text>
+          <text x="984" y="96" text-anchor="middle" fill="#E0522F" font-size="11" font-weight="700">GATE 4, OFFERED</text>
+          <text x="984" y="112" text-anchor="middle" fill="#B39B7F" font-size="11">delivery res, hardware encode</text>
+        </svg>
+      </div>
+      <p class="flow-cap">The <b>FCPXML timeline</b> exports on every cut approval (Resolve and Final Cut import it natively); xmeml (Premiere) and CMX3600 EDL are planned, so those users work from edl.json, cutplan.md, and the renders meanwhile. Same approved EDL, same composite core, so the preview you signed off on is exactly what the final bakes.</p>
+    </div>
+  </section>
+
+  <!-- 8. GRAPHICS ENGINES -->
+  <section class="slide" data-name="Graphics engines">
+    <div class="inner">
+      <div class="uh-head">
+        <span class="manny-badge"><img src="assets/manny/feature-02-director-closeup.jpg" alt="Close portrait of Manny the Manticore"></span>
+        <div class="txt">
+          <span class="kicker">Graphics engines</span>
+          <h2>The beat table <span class="accent">is the contract</span></h2>
+        </div>
+      </div>
+      <p class="sub">One engine-neutral table, produced at gate 3, consumed by every engine. Each row anchors a graphic to the exact word it lands on in the edited timeline. Before the table exists, Manny riffs the ideas with you: he pitches the moments and treatments he sees, you say what you were picturing, and the mix (cards, diagrams, imagery, clips, memes) follows your Production Bible, not a default.</p>
+      <div class="betable">
+        <table class="beat">
+          <thead><tr><th>id</th><th>anchor word</th><th>anchor ts</th><th>type</th><th>engine</th><th>asset</th></tr></thead>
+          <tbody>
+            <tr><td><b>b1</b></td><td>"latency"</td><td class="t">00:12.40</td><td>stat-card</td><td>hyperframes</td><td>null</td></tr>
+            <tr><td><b>b2</b></td><td>"pipeline"</td><td class="t">00:31.08</td><td>diagram</td><td>html</td><td>null</td></tr>
+            <tr><td><b>b3</b></td><td>"subscribe"</td><td class="t">01:47.902</td><td>cta</td><td>remotion</td><td>null</td></tr>
+            <tr><td><b>b4</b></td><td>"the result"</td><td class="t">02:20.15</td><td>lower-third</td><td>ograf</td><td>shot-07</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="enginerow">
+        <div class="eng"><h4>HyperFrames</h4><p>Default per-video overlay beats. Registry checked before authoring; exports ProRes 4444 alpha.</p></div>
+        <div class="eng"><h4>Remotion</h4><p>Stingers, transitions, React-stateful graphics, shorts karaoke captions. Dual render for OBS and the editor.</p></div>
+        <div class="eng"><h4>OGraf</h4><p>Editable broadcast graphics, only where the target supports it (Resolve 21+, or OBS live). Everyone else gets baked alpha.</p></div>
+        <div class="eng"><h4>HTML lane</h4><p>Author from scratch, rendered to exact pixels by Playwright, then frame-verified over a checkerboard for alpha.</p></div>
+      </div>
+      <p class="flow-cap">Every final render is checked with <b>render_verify</b> (pixfmt, duration, fps, resolution, extracted frames) before it is called done. The design-prompting loop drives a capable model when a beat needs bespoke animation nothing in the registry fits.</p>
+    </div>
+  </section>
+
+  <!-- 9. CONFIG + EXTENSIBILITY -->
+  <section class="slide" data-name="Configuration">
+    <div class="inner">
+      <div class="uh-head">
+        <span class="manny-badge"><img src="assets/manny/banner-01-flight-filmribbon.jpg" alt="Manny the Manticore in flight trailing a film strip"></span>
+        <div class="txt">
+          <span class="kicker">Configuration + extensibility</span>
+          <h2>Your studio, <span class="accent">in plain files</span></h2>
+        </div>
+      </div>
+      <div class="cards">
+        <div class="card">
+          <h3>The [[tools]] registry</h3>
+          <ul>
+            <li>Register any generation CLI with a <b>headless invocation</b> and a <b>notes</b> field</li>
+            <li>The notes are persistent memory: model quirks, what it is bad at, how output lands</li>
+            <li>Skills drive your CLIs right <b>every session</b> instead of rediscovering them</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Taste contracts</h3>
+          <ul>
+            <li>The <b>Production Bible</b>: density, image-type policy, overlay aesthetic, CTA inventory</li>
+            <li>The <b>voice bible</b>: how you talk, evidence-cited from your own transcripts</li>
+            <li>The <b>blacklist</b>: LLM tells and phrases you never say, enforced by the linter</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Extend without code</h3>
+          <ul>
+            <li>Per-skill <b>customize.toml</b> overrides, merged team then personal</li>
+            <li>Formats are plain <b>markdown files</b>: a new format is a new file, not new code</li>
+            <li>Each format picks which stages run and carries its own accumulated learnings</li>
+          </ul>
+        </div>
+      </div>
+      <div class="cmd">
+        <span class="lab">A registered tool, in your config</span>
+        <code>[[modules.manticore.tools]] &nbsp; name = "grok" &nbsp; capabilities = ["image","video"] &nbsp; headless = 'grok -p "&lt;prompt&gt;" --always-approve'</code>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10. COMPOUNDING LOOP + CLOSING -->
+  <section class="slide" data-name="The loop">
+    <div class="inner split">
+      <div>
+        <span class="kicker">The compounding loop</span>
+        <h2>It gets <span class="accent">smarter every video</span></h2>
+        <p class="sub">Retro routes each post-publish note to the file that would have prevented it: voice bible, Production Bible, blacklist, format learnings, tool notes. The ratchet only turns one way, and it never weakens a gate.</p>
+        <div class="cmd">
+          <span class="lab">Install</span>
+          <code>npx bmad-method install --custom-source https://github.com/bmad-code-org/bmad-manticore</code>
+        </div>
+        <p class="then">Then just say: <span class="accent">talk to Manny.</span></p>
+        <div class="links">
+          <a href="https://github.com/bmad-code-org/bmad-manticore">GitHub</a>
+          <a href="https://discord.gg/gk8jAdXWmj">Discord</a>
+          <a href="https://youtube.com/@BMadCode">YouTube</a>
+          <a href="https://bmadcode.com">bmadcode.com</a>
+        </div>
+      </div>
+      <div class="hero-cell frame-corners">
+        <img src="assets/manny/banner-04-banking-swirl.jpg" alt="Manny the Manticore banking through the air at sunset as film frames swirl in his wake">
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  (function(){
+    var deck=document.getElementById('deck');
+    var slides=Array.prototype.slice.call(deck.querySelectorAll('.slide'));
+    var dotsWrap=document.getElementById('dots');
+    var cnum=document.getElementById('cnum');
+    var prev=document.getElementById('prev'), next=document.getElementById('next');
+    var current=0;
+    slides.forEach(function(s,i){
+      var b=document.createElement('button');
+      b.setAttribute('aria-label','Go to slide '+(i+1)+': '+(s.dataset.name||''));
+      b.addEventListener('click',function(){ go(i); });
+      dotsWrap.appendChild(b);
+    });
+    var dots=Array.prototype.slice.call(dotsWrap.children);
+    function pad(n){ return (n<9?'0':'')+(n+1); }
+    function setActive(i){
+      current=i; cnum.textContent=pad(i);
+      dots.forEach(function(d,di){ d.classList.toggle('active',di===i); });
+      prev.disabled=(i===0); next.disabled=(i===slides.length-1);
+    }
+    function go(i){ i=Math.max(0,Math.min(slides.length-1,i)); slides[i].scrollIntoView({behavior:'smooth',block:'start'}); setActive(i); }
+    prev.addEventListener('click',function(){ go(current-1); });
+    next.addEventListener('click',function(){ go(current+1); });
+    document.addEventListener('keydown',function(e){
+      if(e.key==='ArrowRight'||e.key==='ArrowDown'||e.key===' '||e.key==='PageDown'){ e.preventDefault(); go(current+1); }
+      else if(e.key==='ArrowLeft'||e.key==='ArrowUp'||e.key==='PageUp'){ e.preventDefault(); go(current-1); }
+      else if(e.key==='Home'){ e.preventDefault(); go(0); }
+      else if(e.key==='End'){ e.preventDefault(); go(slides.length-1); }
+    });
+    if('IntersectionObserver' in window){
+      var io=new IntersectionObserver(function(entries){
+        entries.forEach(function(en){ if(en.isIntersecting){ var idx=slides.indexOf(en.target); if(idx>=0) setActive(idx); } });
+      },{root:deck,threshold:0.55});
+      slides.forEach(function(s){ io.observe(s); });
+    }
+    setActive(0);
+  })();
+</script>
+</body>
+</html>

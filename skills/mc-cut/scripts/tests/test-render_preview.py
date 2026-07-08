@@ -2,12 +2,14 @@
 # /// script
 # requires-python = ">=3.11"
 # ///
-"""Tests for render_preview.py — the deterministic, ffmpeg-free parts: the
+"""Tests for render_preview.py: the deterministic, ffmpeg-free parts: the
 timeline math (segment durations, internal boundary times) and the
-filter_complex / command construction from a canned EDL.
+filter_complex / command construction from a canned EDL, plain and with the
+composited-overlay mode (shared with render_final.py via composite_core.py).
 
 The actual render, ffprobe, and boundary-frame extraction are exercised by
-running the script against a real source; they are not unit-tested here."""
+the synthesized-fixture integration test in test-render_final.py (same
+compositing core) and by running the script against a real source."""
 import importlib.util
 import subprocess
 import sys
@@ -84,6 +86,56 @@ class TestFilterComplex(unittest.TestCase):
         fc = mod.build_filter_complex(edl, {"raw/camera-a.mp4": 0}, 720)
         # 40ms clip, 30ms fade -> fade clamped to dur/2 = 20ms.
         self.assertIn("afade=t=in:st=0:d=0.02", fc)
+
+
+class TestCompositedMode(unittest.TestCase):
+    def overlays(self):
+        return [
+            {"index": 1, "start": 1.0, "dur": 2.5, "image": False,
+             "path": "graphics/b1.mov", "id": "b1"},
+            {"index": 2, "start": 9.0, "dur": 1.5, "image": True,
+             "path": "graphics/b2.png", "id": "b2"},
+        ]
+
+    def test_overlay_chain_and_windows(self):
+        edl = canned_edl()
+        fc = mod.build_filter_complex(edl, {"raw/camera-a.mp4": 0}, 720,
+                                      overlays=self.overlays(),
+                                      overlay_size=(1280, 720))
+        # concat feeds the overlay chain, which ends in [outv]
+        self.assertIn("concat=n=3:v=1:a=1[basev][outa]", fc)
+        self.assertIn("[1:v]format=rgba,scale=1280:720,"
+                      "setpts=PTS-STARTPTS+1/TB[ov0]", fc)
+        self.assertIn("overlay=eof_action=pass:enable='between(t,1,3.5)'", fc)
+        self.assertIn("overlay=eof_action=pass:enable='between(t,9,10.5)'", fc)
+        self.assertIn("[base2]format=yuv420p[outv]", fc)
+
+    def test_no_overlays_keeps_plain_labels(self):
+        fc = mod.build_filter_complex(canned_edl(), {"raw/camera-a.mp4": 0}, 720)
+        self.assertIn("concat=n=3:v=1:a=1[outv][outa]", fc)
+        self.assertNotIn("overlay=", fc)
+        self.assertNotIn("format=yuv420p", fc)
+
+    def test_command_caps_looped_image_inputs(self):
+        cmd, _ = mod.build_command(canned_edl(), Path("/proj"),
+                                   Path("/out/p.mp4"), 720,
+                                   overlays=self.overlays(),
+                                   overlay_size=(1280, 720))
+        joined = " ".join(cmd)
+        # video overlay input capped to its beat dur
+        self.assertIn("-t 2.5 -i graphics/b1.mov", joined)
+        # image overlay looped AND explicitly duration-capped
+        self.assertIn("-loop 1 -t 1.5 -i graphics/b2.png", joined)
+        self.assertEqual(cmd.count("-i"), 3)
+
+    def test_beats_without_graphics_dir_is_usage_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            edl = Path(tmp) / "edl.json"
+            edl.write_text('{"source":"x","segments":[{"source":"x",'
+                           '"start":0,"end":1}]}')
+            r = run([str(edl), "-o", str(Path(tmp) / "p.mp4"),
+                     "--beats", str(Path(tmp) / "beats.md")])
+            self.assertEqual(r.returncode, 2)
 
 
 class TestCommand(unittest.TestCase):

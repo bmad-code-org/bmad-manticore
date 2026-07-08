@@ -10,7 +10,7 @@
       "name": "bmad-manticore",
       "source": "./",
       "description": "AI video production pipeline: brain dump to a rough cut sitting in your editor, in your own words, with approval gates at every taste decision.",
-      "version": "0.0.1",
+      "version": "1.0.0",
       "author": { "name": "Brian (BMad) Madison" },
       "skills": [
         "./skills/mc-agent",
@@ -25,6 +25,7 @@
         "./skills/mc-beats",
         "./skills/mc-graphics",
         "./skills/mc-assets",
+        "./skills/mc-audio",
         "./skills/mc-package",
         "./skills/mc-stream-pack",
         "./skills/mc-retro"

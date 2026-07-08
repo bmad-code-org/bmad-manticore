@@ -18,7 +18,7 @@ The outcome is a FOLDER (`*.ograf.json` manifest + Web Component `.mjs` + assets
 
 ## Design the graphic
 
-When a beat arrives routed from mc-graphics or mc-stream-pack, design from the approved `beats.md`/`STORYBOARD.md` and the format profile instead of re-eliciting; the "get a nod, then build" confirmation below is the only interaction point. Otherwise open the floor: ask what they are making and where it plays, then PROPOSE, don't just transcribe. Offer a concrete look (layout, motion, palette, type) and one or two alternatives, grounded in `{brand-path}/tokens.json` (never invent brand colors from memory; if no tokens exist, ask). Lower thirds anchor bottom-left/center; bugs anchor a corner; full-frame titles center. Suggest entrance/hold/exit timing (a 10s lower third: in over ~1.3s, hold, out over ~0.8s). Sketch the animation in words, get a nod, then build.
+When a beat arrives routed from mc-graphics or mc-stream-pack, design from the approved `beats.md`/`STORYBOARD.md` and the format profile instead of re-eliciting; the "get a nod, then build" confirmation below is the only interaction point. Otherwise open the floor: ask what they are making and where it plays, then PROPOSE, don't just transcribe. Offer a concrete look (layout, motion, palette, type) and one or two alternatives, grounded in `{brand-path}/tokens.json` and `{brand-path}/production-bible.md` (the styling contract beyond tokens: overlay aesthetic, motion feel, placement rules; read both before authoring anything). Never invent brand colors from memory; if no tokens exist, ask. Lower thirds anchor bottom-left/center; bugs anchor a corner; full-frame titles center. Suggest entrance/hold/exit timing (a 10s lower third: in over ~1.3s, hold, out over ~0.8s). Sketch the animation in words, get a nod, then build.
 
 ## Decide the config surface
 
@@ -26,7 +26,7 @@ Walk the design and ask which values an operator should change per use (name, ti
 
 ## Build
 
-Generate with `uv run {skill-root}/scripts/scaffold_ograf.py` rather than hand-writing (it bakes in every standard below), then edit the generated `.mjs` to realize the design (the deterministic `render(tMs)` body), reading `{skill-root}/references/ograf-spec.md` for the manifest and Web Component contract. Inline the logo SVG and embed fonts so the package is self-contained. Output goes to the project's `graphics/ograf/<id>/` (or the stream pack's scenes folder).
+Generate with `uv run {skill-root}/scripts/scaffold_ograf.py` rather than hand-writing (it bakes in the structural standards below; the standards that live in your own edits, like deterministic `render(tMs)` and hardened asset loads, remain yours to keep as you build). Pass the palette and font args from `{brand-path}/tokens.json`; the scaffold warns in its JSON output when any are left at the placeholder defaults. Then edit the generated `.mjs` to realize the design (the deterministic `render(tMs)` body), reading `{skill-root}/references/ograf-spec.md` for the manifest and Web Component contract. Inline the logo SVG and embed fonts so the package is self-contained. Output goes to the project's `graphics/ograf/<id>/` (or the stream pack's scenes folder).
 
 ## Verify before handoff
 

@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.11"
 # ///
-"""Tests for transcribe.py — the deterministic, model-free parts: the
+"""Tests for transcribe.py: the deterministic, model-free parts: the
 token->word mapping (indexing, gap computation, clamping, rounding) and the
 provider-switch exit code.
 
@@ -133,7 +133,7 @@ class TestNormalizeWords(unittest.TestCase):
 
 class TestProviderSwitch(unittest.TestCase):
     def test_unimplemented_provider_exits_3(self):
-        r = run(["some.mp4", "-o", "out.json", "--provider", "elevenlabs-scribe"])
+        r = run(["some.mp4", "-o", "out.json", "--provider", "deepgram-nova3"])
         self.assertEqual(r.returncode, 3)
         self.assertIn("not implemented", r.stderr.lower())
 

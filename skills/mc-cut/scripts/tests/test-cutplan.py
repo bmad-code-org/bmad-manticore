@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.11"
 # ///
-"""Tests for cutplan.py — the cut-candidate finder must catch every planted
+"""Tests for cutplan.py: the cut-candidate finder must catch every planted
 defect class, gate soft fillers to sentence starts, and emit the pinned schema
 shape (cls on fillers only, candidates sorted by start)."""
 import json
@@ -173,18 +173,28 @@ class TestRetake(unittest.TestCase):
 class TestMarker(unittest.TestCase):
     def test_marker_phrase_spans_words(self):
         words = seq([("hi.", 0.3), ("question", 0.3), ("from", 0.3),
-                     ("claude", 0.3), ("next.", 0.3)])
+                     ("the", 0.3), ("interviewer", 0.3), ("next.", 0.3)])
         result, _ = run(words)
         mk = by_type(result, "marker")
         self.assertEqual(len(mk), 1)
         self.assertEqual(mk[0]["start"], words[1]["start"])
-        self.assertEqual(mk[0]["end"], words[3]["end"])
+        self.assertEqual(mk[0]["end"], words[4]["end"])
         self.assertEqual(mk[0]["severity"], "med")
 
     def test_default_has_no_marker(self):
         words = seq([("just", 0.3), ("talking.", 0.3)])
         result, _ = run(words)
         self.assertEqual(by_type(result, "marker"), [])
+
+    def test_legacy_phrase_not_matched_by_default(self):
+        words = seq([("question", 0.3), ("from", 0.3), ("claude", 0.3)])
+        result, _ = run(words)
+        self.assertEqual(by_type(result, "marker"), [])
+
+    def test_legacy_phrase_works_via_flag(self):
+        words = seq([("question", 0.3), ("from", 0.3), ("claude", 0.3)])
+        result, _ = run(words, extra=["--marker-cues", "question from claude"])
+        self.assertEqual(len(by_type(result, "marker")), 1)
 
     def test_custom_marker_cues(self):
         words = seq([("ask", 0.3), ("the", 0.3), ("panel.", 0.3)])

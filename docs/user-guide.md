@@ -1,10 +1,12 @@
+![Manny the Manticore perched on a clapperboard rock above the falls at red sunset](assets/manny/banner-02-clifftop-clapperboard.jpg)
+
 # Configure Your Own Manticore Studio
 
-How to go from a fresh install to a working studio. Ten minutes of setup, then the pipeline does the remembering.
+How to go from a fresh install to a working studio. Setup is a real interview now (budget 30 to 60 minutes to do it well); after that, the pipeline does the remembering.
 
-The short version: install, then say "talk to Manny". Manny the Manticore (mc-agent) is the studio's director and front door; he notices when the studio is not set up, runs setup with you, turns your ideas into projects, and routes every stage after that. This guide is the same path spelled out, for when you want to understand or drive the pieces yourself.
+The short version: install, then say "talk to Manny". Manny the Manticore (mc-agent) is the studio's director and front door; he notices when the studio is not set up, runs the onboarding interview with you, turns your ideas into projects, routes footage you already have into footage-first projects, and drives every stage after that. This guide is the same path spelled out, for when you want to understand or drive the pieces yourself.
 
-Note on status: Manticore is shared early. The setup, brain dump, outline, script, and cut stages work today; the graphics and asset lanes are landing (their contracts are fixed). The README's Status section is the source of truth for what runs right now.
+Note on status: the README's Status section is the source of truth for what is production-proven versus newly built. mc-setup's closing summary also tells you, per configured lane, what is implemented versus planned on your machine.
 
 ## 1. Pick where your studio lives
 
@@ -14,9 +16,10 @@ Manticore is designed to be installed at the root of a dedicated content project
 my-studio/                        <- install here, run everything from here
   _bmad/custom/config.toml        <- studio config: the [modules.manticore] table
                                      (mc-setup writes it; config.user.toml overrides)
+  .env.example                    <- scaffolded by setup if any opted-in lane needs a key
   manticore/
-    brand/                        <- tokens.json, voice-bible.md, blacklist.md,
-                                     exemplars/, headshots/
+    brand/                        <- tokens.json, production-bible.md, voice-bible.md,
+                                     blacklist.md, exemplars/, headshots/
     formats/                      <- your editable format profiles (learnings live here)
     projects/                     <- one folder per video, fully self-contained
       my-first-video/
@@ -30,44 +33,81 @@ Install:
 npx bmad-method install --custom-source https://github.com/bmad-code-org/bmad-manticore
 ```
 
-## 2. Run mc-setup
+## 2. Run mc-setup: the onboarding interview
 
-Say "run manticore setup" (or invoke mc-setup). It walks you through everything below and writes the studio config: the `[modules.manticore]` table in `_bmad/custom/config.toml` (personal overrides go in `config.user.toml` next to it). Every other skill resolves that table with the installed `_bmad/scripts/resolve_config.py`; if it is empty, they send you back here. Re-run it any time; it updates rather than overwrites. Each skill also ships its own `customize.toml` defaults, overridable per skill in `_bmad/custom/<skill>.toml`.
+Say "talk to Manny" and he routes you here, or say "run manticore setup" directly. It walks you through everything below and writes the studio config: the `[modules.manticore]` table in `_bmad/custom/config.toml` (personal overrides go in `config.user.toml` next to it). Every other skill resolves that table with the installed `_bmad/scripts/resolve_config.py`; if it is empty, they send you back here. Re-run it any time; it updates rather than overwrites, and it detects a 0.x studio and runs a short delta interview instead of starting over. Each skill also ships its own `customize.toml` defaults, overridable per skill in `_bmad/custom/<skill>.toml`.
 
-What it covers:
+What the interview covers, in order:
 
-- Dependencies: uv (required; runs all pipeline scripts), ffmpeg (with ffprobe), node/npx, git, optionally yt-dlp. It checks, you approve any installs.
-- You: name, channel, the links that go in your video descriptions, your measured speaking rate (used for script runtime estimates; measure it from a real transcript, the generic 145 wpm is usually wrong for on-camera educators).
-- Your editor: see section 4.
-- Your brand: see section 3.
-- Your generation tools: see section 5.
-- API lanes: which env vars hold your keys. Keys never go in the TOML, only env var names.
+- Dependencies and platform: uv (required; runs all pipeline scripts), ffmpeg (with ffprobe), node/npx, git, optionally yt-dlp. It checks, you approve any installs. It also runs a platform gate: the default transcription lane is Apple-Silicon-only, and on other machines it points you at the documented fallbacks (see section 6).
+- You: name, channel, the links that go in your video descriptions, your speaking rate (the guided voice-bible build later measures it from a real transcript, which beats the generic 145 wpm every time).
+- Video defaults: record resolution, delivery resolution, fps. Offer it a recent recording and it fills the values from ffprobe instead of guessing.
+- Live tool: obs, ecamm, or other, which drives the stream-pack lane's deliverable format. Any recurring shows or series you produce get noted for series folders and packaging templates.
+- Render consent: see section 3.
+- The video style interview: see section 4.
+- Your brand build, headshots, and the guided voice bible: see section 5.
+- Your editor: see section 7.
+- Your generation tools, asset lanes, and audio lanes: see section 8.
+- Keys and .env.example: only if you opted into a metered lane, setup confirms the env var name (never the value) and tells you, inside that opt-in branch only, where that vendor issues keys. It then scaffolds a `.env.example` listing exactly the env vars your resolved config references, with a one-line source note per key. Local-first defaults usually mean there are none, and then no file is written.
+- The honest runnability report: setup closes by telling you exactly what will happen on your first project with these settings, which configured lanes are implemented versus planned, and which gaps are pending (missing headshots block thumbnails, an unbuilt voice bible, placeholder Production Bible sections, unverified tools, empty asset lanes). The pending list is your highest-value next work.
 
-## 3. Your brand folder
+## 3. Render consent: the render-first default
 
-`{brand-path}` (default `manticore/brand/`) is where your identity lives:
+Manticore renders by default, and setup asks you to confirm it rather than assume it:
 
-- `tokens.json`: colors, fonts, logo paths, motion timings. Every graphic in every engine reads this file; change it once, everything follows. If you have an existing brand system doc, point mc-setup at it and it fills tokens from that.
+- A fast low-res preview render is produced after every cut-plan approval, so every iteration is watchable.
+- Once the graphics stage has rendered the overlays, the preview re-renders with them composited, so you iterate on overlays and CTAs visually.
+- At the final gate, a final-quality render is offered (delivery resolution and codec per your config).
+- The editor timeline export and all assets (edl.json, cutplan.md, overlays) are ALWAYS created alongside, so you can jump into Resolve, Premiere, or any editor at any step without losing work.
+
+Decline it and previews and finals become offers the pipeline makes instead of automatic outputs; the timeline export and assets remain always-on either way.
+
+## 4. The video style interview
+
+This is where 1.0 stops producing sparse text cards: your visual taste is captured up front and seeds the Production Bible (`{brand-path}/production-bible.md`), the styling contract every visual stage reads before authoring anything. It asks:
+
+- A creator to emulate: drop links to videos whose style you want to lean toward. Setup studies them and echoes back what it thinks the takeaway is (fast funny meme cuts? polished charts and dataviz? a particular edit rhythm?), and you confirm before anything lands in the bible. The confirmed takeaways seed every question below as proposed defaults.
+- Visual density: high (a graphic beat roughly every 10 to 20 seconds), medium (20 to 45), or low (45 to 90), on a front-loaded pacing curve. Default medium; tutorials and explainers usually want high.
+- Preferred image types: SVG/diagrammatic where text must be accurate, generative imagery for what does not exist, real verified imagery first for anything that does. The sourcing hierarchy is real, then generative, then hand-built text card.
+- Overlay and popup aesthetic: describe a look, point at reference screenshots or creators to emulate, or supply overlays you have already shipped.
+- Animation feel: snappy, smooth, or dramatic, plus entrance/exit conventions, mapped onto your brand tokens' motion values.
+- CTA inventory and appetite: which CTAs you run (subscribe, community, support, product, next-video, playlist, site) and how aggressively. mc-beats plans CTA beats from this inventory at research-backed placements, and you approve them at gate 3 like any other graphic.
+- Asset libraries you already own (icon sets, b-roll folders, photo archives) and where they live.
+
+The Production Bible evolves after setup: mc-retro routes every visual-style note into it, dated and append-only.
+
+## 5. Your brand folder
+
+`{brand-path}` (default `manticore/brand/`) is where your identity lives, and setup's exit state is filled, never placeholders. Point it at anything that already defines your brand or voice (a website, CSS, design tokens, style guides, past videos) and it mines those sources before asking you anything.
+
+- `tokens.json`: colors, fonts, logo paths, motion timings. Every graphic in every engine reads this file; change it once, everything follows. Filled from your mined brand sources when they exist.
+- `production-bible.md`: the visual taste contract from section 4, scaffolded and filled during setup.
 - `blacklist.md`: regex patterns for LLM tells and phrases you never say. Ships with a starter set; grows every time you flag something in retro.
-- `voice-bible.md`: the rules of how you actually talk, deconstructed from your own published transcripts with cited examples. This is the highest-value asset in the studio; budget a session to build it (the file ships as a build spec that walks you through it).
-- `exemplars/`: 3 to 5 of your best published scripts as spoken transcripts. Ground truth for the voice bible and for mc-script.
-- `headshots/`: 3 to 6 approved photos of you, used for face-consistent thumbnail generation. Approved photos only.
+- `voice-bible.md`: the rules of how you actually talk. Setup offers a guided build: give it your published YouTube URLs or transcripts (fetched with yt-dlp, with permission) plus any reference creators, and it distills an evidence-cited bible where every rule quotes a verbatim example, measures your real wpm from your own transcript, and keeps your voice separate from reference voices. This is the highest-value asset in the studio.
+- `exemplars/`: your best published scripts as spoken transcripts, saved during the voice-bible build (`own/` and `reference/` kept separate).
+- `headshots/`: 3 to 6 approved photos of you with varied expressions (neutral, surprised, thinking, excited). Setup classifies and indexes them. When a thumbnail or generated asset needs you in it, the original photo goes straight to your image model with a "use the person in this image" prompt, and any revision re-sends the same original photo with an improved prompt, never a previous generation (chained edits degrade like a photocopy of a photocopy). Approved photos only; thumbnails are blocked until headshots exist, and setup says so loudly.
 
-## 4. Your editor
+## 6. Transcription for the cut stage
 
-Manticore's default deliverable is an editable cut in your editor, never a silently baked video (ask for a final render any time and it will happen; it is just not the default). Tell mc-setup what you finish in:
+The cut stage needs a word-level transcript with verbatim fillers (the "um"s and restarts are exactly what gets cut). The default provider is parakeet-mlx: free, local, word timestamps, fillers preserved verbatim, no API key. The model downloads once on first run.
 
-- DaVinci Resolve or Final Cut Pro: an FCPXML timeline of trimmable clips (the first export lane being implemented; see the Status section of the README for what works today). Resolve 21+ users can also set `ograf-editable = true` to receive lower thirds as OGraf packages that stay editable inside Resolve's Inspector.
-- Premiere Pro: xmeml/EDL export is on the roadmap; the design gives you the cut plan, the edl.json cut list, and a preview render, which map 1:1 onto manual cuts.
-- Descript or anything else: set `timeline-format = "none"`. The cut stage still does its most valuable work (word-level transcript, cut decisions with reasons, preview), you apply the cuts in your tool.
+Platform honesty: parakeet-mlx runs only on macOS Apple Silicon. On other machines, setup's dependency check flags it and points at local whisper.cpp or faster-whisper as fallbacks; they normalize fillers away, so cut quality drops, and a supported cross-platform lane is on the roadmap. Metered API providers exist behind the same `[transcription]` switch as explicit opt-in choices only; nothing metered is configured unless you choose it.
+
+## 7. Your editor
+
+Render-first does not lock you out of your editor; the exit ramp is always built. Tell mc-setup what you finish in:
+
+- DaVinci Resolve or Final Cut Pro: an FCPXML timeline of trimmable clips (implemented), exported on every cut approval. Resolve 21+ users can also set `ograf-editable = true` to receive lower thirds as OGraf packages that stay editable inside Resolve's Inspector.
+- Premiere Pro: the xmeml export lane has not landed yet, so Premiere users work from the cut plan, edl.json, and the rendered preview/final, which map 1:1 onto manual cuts.
+- Descript or anything else: set `timeline-format = "none"`. You get the word-level transcript, cut decisions with reasons, and the renders; you apply the cuts in your tool.
 
 Whatever the editor, motion graphics arrive as ProRes 4444 MOVs with alpha, which everything accepts.
 
-## 5. Your generation tools (the part that stops the forgetting)
+## 8. Your generation tools (CLI-first, metered opt-in)
 
-If you use CLI tools for image or video generation, register each one as a `[[tools]]` entry with a `headless` invocation and a `notes` field. The notes are the persistent memory: model quirks, what the tool is bad at, how output lands. Skills follow the notes exactly instead of rediscovering the tool every session.
+Asset lanes are CLI-tool-first: a generation CLI backed by a subscription you already pay for is the preferred lane, and metered APIs are an explicit opt-in, never a silent default. Register each CLI you use as a `[[tools]]` entry with a `headless` invocation and a `notes` field. The notes are the persistent memory: model quirks, what the tool is bad at, how output lands. Setup verifies each registered tool end to end (a real tiny invocation whose output file is checked) and records the result.
 
-Common examples, all optional: the Grok CLI (Imagine stills and image-to-video with native audio, plus X/Twitter access, covered by a SuperGrok / X Premium+ subscription), the Antigravity CLI `agy` (Gemini image generation on your Google plan quota), and the Codex CLI (stills with near-perfect text rendering for thumbnails and title cards, covered by ChatGPT Plus/Pro). If you already pay for one of these subscriptions, Manticore puts it to work; if not, the metered API lanes below cover the same ground pay-per-use.
+Common examples, all optional: the Grok CLI (Imagine stills and image-to-video with native audio, plus X/Twitter access, covered by a SuperGrok / X Premium+ subscription), the Antigravity CLI `agy` (Gemini image generation on your Google plan quota), and the Codex CLI (stills with near-perfect text rendering for thumbnails and title cards, covered by ChatGPT Plus/Pro).
 
 ```toml
 [[modules.manticore.tools]]
@@ -81,24 +121,30 @@ readable on-screen text; it renders as gibberish.
 """
 ```
 
-No CLI tools is fine too: the API lanes (xAI for stills/b-roll, Veo for hero shots) are metered pay-per-use and configured with env var names only.
+A lane with no good answer stays empty: mc-assets stops and asks at farming time rather than bill anyone by default.
 
 One standing rule regardless of lane: generated footage is for atmosphere and story beats. Anything showing a user interface or text that must read correctly comes from real screen recordings, because AI-generated UI and text render as convincing-at-a-glance gibberish.
 
-## 6. Transcription for the cut stage
+Sound follows the same local-first pattern through the mc-audio service skill: TTS narration and two-host dialogue (Kokoro-82M; stock voices, no cloning, so narration in your own voice still means recording it), instrumental music beds (MusicGen-small), and SFX (AudioLDM2) all run free and local. Setup confirms these lanes and offers to build the engine workspace at `manticore/engines/audio-lab` (a several-GB venv, ~340 MB of voice models now, ~5 GB of model cache on the first music or SFX run; nothing downloads without your go-ahead). Full songs with vocals have no validated local lane yet, and paid audio lanes (ElevenLabs, Gemini TTS) are explicit opt-ins.
 
-The cut stage needs a word-level transcript with verbatim fillers (the "um"s and restarts are exactly what gets cut). The default provider is parakeet-mlx: free, local (Apple Silicon), word timestamps, fillers preserved verbatim, no API key. The model downloads once on first run. Metered API providers (ElevenLabs Scribe, Deepgram) can slot in behind the same `[transcription]` switch if you ever need one.
+## 9. Your first video
 
-## 7. Your first video
+Idea-first, the full pipeline:
 
-1. Invoke mc-new: pick a format (start with talking-head), get a project folder.
-2. Talk to mc-braindump about the idea until you have said everything you believe about it. Your exact words become the script's raw material.
+1. Tell Manny you have an idea (or invoke mc-new): pick a format (start with talking-head), get a project folder.
+2. Talk to mc-braindump about the idea until you have said everything you believe about it. Your exact words become the script's raw material. Offer to record the session: with the camera rolling, you read each interview question aloud prefixed with the marker cue (default "question from the interviewer"), and the cut stage segments the recording mechanically, so the braindump becomes usable footage.
 3. Approve or edit the hook + outline at gate 1.
-4. Record however you always record. Drop takes in the project's `raw/` folder (constant frame rate).
-5. Review the cut plan at gate 2 ("trailing 'so' at 42:20, keep or cut?"), then open the result in your editor.
-6. Approve the graphics beat table at gate 3, let the engines render, and finish in your editor at gate 4.
-7. After publishing, give mc-retro one round of notes. It edits the format profile and your brand files so the next video starts smarter.
+4. Record however you always record. Drop takes in the project's `raw/` folder; the cut stage preflights them and remuxes variable frame rate sources automatically.
+5. Review the cut plan at gate 2 ("trailing 'so' at 42:20, keep or cut?"). Every approval produces a watchable preview render, and the editor timeline lands next to it.
+6. Riff the graphics with Manny before the table exists: he pitches the moments and treatments he sees, you tell him what you were picturing. Then approve the graphics beat table (including the planned CTA beats) at gate 3. The engines render, and the preview re-renders with graphics composited so you see the actual video.
+7. At gate 4, take the offered final-quality render, or finish in your editor from the always-exported timeline. Either closes the gate.
+8. After publishing, give mc-retro one round of notes. It edits the format profile, your bibles, and your brand files so the next video starts smarter, then offers the post-publish wrap (archive hygiene, promoting evergreen assets).
 
-## 8. Formats
+Footage-first, when the video already exists:
 
-Your `manticore/formats/` copies are yours to edit; each profile decides which stages run and holds a Learnings section that retro appends to. Six ship by default: talking-head, screen-tutorial (bans generated b-roll: real UI only), voiceover-explainer, short (9:16 re-edit of a parent project), livestream-pack (an OBS asset pack, not a video), course-lesson. A new format is a new markdown file.
+1. Hand Manny the file ("cut this VOD", "make a video from this recording"). mc-new's ingest mode registers the source and writes a post-production stage list that starts at cut.
+2. The same gates apply from the cut stage onward: cut plan, beats with CTAs mined from the transcript, graphics, packaging with dual-timeline chapters, the final render offer.
+
+## 10. Formats
+
+Your `manticore/formats/` copies are yours to edit; each profile decides which stages run, carries structured density and beat-type frontmatter, and holds a Learnings section that retro appends to. Seven ship by default: talking-head, screen-tutorial (bans generated b-roll: real UI only), voiceover-explainer (narration is creator-recorded until the TTS lane lands), short (9:16 re-edit of a parent project), livestream-pack (an OBS asset pack, not a video), livestream-vod (footage-first post-production of a stream recording), course-lesson. A new format is a new markdown file.

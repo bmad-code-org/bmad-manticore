@@ -4,7 +4,7 @@ The master spec for the Manticore pipeline, owned by mc-pipeline (the router). I
 
 Conventions used below:
 
-- The studio config is the `[modules.manticore]` table in `{project-root}/_bmad/custom/config.toml` (personal overrides in `config.user.toml`), created by mc-setup and resolved with `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {project-root} --key modules.manticore`. Table names like `[owner]`, `[paths]`, `[editor]`, `[transcription]`, `[assets]`, `[mcp]` refer to its sub-tables.
+- The studio config is the `[modules.manticore]` table in `{project-root}/_bmad/custom/config.toml` (personal overrides in `config.user.toml`), created by mc-setup and resolved with `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {project-root} --key modules.manticore`. Table names like `[owner]`, `[paths]`, `[video]`, `[render]`, `[style]`, `[cta]`, `[live]`, `[editor]`, `[transcription]`, `[assets]`, `[mcp]` refer to its sub-tables. (`[defaults.*]` names appear only inside mc-setup's `customize.toml`, the seed that mc-setup copies from; a resolved studio config has no `[defaults]` table.)
 - `{projects-path}`, `{brand-path}`, `{formats-path}`, `{engines-path}` are the `[paths]` values resolved against `{project-root}`. If `[modules.manticore]` is empty, run mc-setup first; no stage skill proceeds without it.
 - Per-skill defaults and overrides live in each skill's `customize.toml`, resolved with `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root}`. Skills read only their own folder and project files, never another skill's folder.
 - "the creator" is the human owner configured in `[owner]`; skills address them by their configured name.
@@ -20,12 +20,12 @@ Format profiles select a subset of these stages (see the `stages:` frontmatter o
 | 3 | outline | mc-outline | gate 1: outline | `outline.md` (hooks + outline + packaging promise) |
 | 4 | script | mc-script | | `script.md` (lint passed, craft QA passed) |
 | 5 | record | the creator | | `raw/*` recordings, constant frame rate |
-| 6 | cut | mc-cut | gate 2: cutplan | `transcript/words.json` (suffixed `<source-id>.words.json` when a project has multiple sources), `cut/candidates.json`, `cut/cutplan.md`, `cut/edl.json`, `cut/rough.fcpxml` (per `[editor] timeline-format`; `none` skips), `cut/preview.mp4` |
+| 6 | cut | mc-cut | gate 2: cutplan | `transcript/words.json` (suffixed `<source-id>.words.json` when a project has multiple sources), `cut/candidates.json`, `cut/cutplan.md`, `cut/edl.json`, `cut/rough.fcpxml` (per `[editor] timeline-format`; `none` skips), `renders/preview.mp4` (fast low-res preview, re-rendered each iteration; once stage 8 has rendered overlays, the router sends the project back through mc-cut to re-render it with graphics composited) |
 | 7 | beats | mc-beats | gate 3: beats | `beats/beats.md` (the beat table), `beats/STORYBOARD.md` |
-| 8 | graphics | mc-graphics | | `graphics/` alpha MOVs + `graphics/HANDOFF.md` |
+| 8 | graphics | mc-graphics | | `graphics/` alpha MOVs + `graphics/HANDOFF.md`; on completion the router routes through mc-cut to re-render `renders/preview.mp4` with the overlays composited |
 | 9 | assets | mc-assets | | `assets/` + `assets/manifest.json` |
 | 10 | package | mc-package | | `packaging/titles.md`, `packaging/thumbs/`, `packaging/description.md`, `packaging/chapters.md` |
-| 11 | final | the creator, in their editor | gate 4: final | `renders/` final deliverable |
+| 11 | final | the creator, with an offered pipeline render | gate 4: final | `renders/final.mp4` (the offered final-quality render: same EDL, graphics composited from the beat table, delivery resolution and codec per `[render]`), or the creator's own editor render into `renders/` |
 | 12 | retro | mc-retro | | edits to `{formats-path}/<format>.md` learnings + offending skill files |
 
 Stages 8 and 9 may run in parallel once gate 3 is approved. Stage 10 may start any time after gate 1 (the packaging promise exists from the outline).
@@ -40,6 +40,7 @@ Stages 8 and 9 may run in parallel once gate 3 is approved. Stage 10 may start a
   "created": "2026-07-03",
   "parent": null,
   "stage": "braindump",
+  "series": null,
   "stages": ["new", "braindump", "outline", "script", "record", "cut", "beats", "graphics", "assets", "package", "final", "retro"],
   "stages_done": ["new"],
   "approvals": {
@@ -56,11 +57,12 @@ Stages 8 and 9 may run in parallel once gate 3 is approved. Stage 10 may start a
 Field rules:
 
 - `stage` is the stage currently in progress or next to run. When the last stage in `stages` completes (retro), it is set to `done`, the one terminal value not drawn from `stages`.
-- `stages` is copied from the format profile at creation; never assume the master list.
+- `stages` is copied from the format profile at creation; never assume the master list. Footage-first projects (an existing recording, a livestream VOD) use the ingest-first variant written by mc-new's ingest mode: `["new", "cut", "beats", "graphics", "assets", "package", "final", "retro"]`. It skips the ideation stages entirely; the source file is registered in `sources` at creation.
+- `series` (optional, default `null`) names the series this project belongs to, written by mc-new's `--series` mode. A series is a folder under `{projects-path}` holding a `common/` folder for evergreen shared assets and one subfolder per episode project. Stages that read brand templates (mc-package) check `series` to apply per-series packaging templates.
 - `approvals` values are `null` (not reached), `"pending"` (artifact presented, waiting on the creator), or an ISO date string (approved that day). Only the creator's explicit say-so in conversation moves pending to a date.
 - `artifacts` maps artifact names to paths as they are produced, e.g. `"edl": "cut/edl.json"`.
 - `parent` links a short to its long-form parent project slug.
-- `sources` (optional) registers media inputs as they arrive: `{"id": "camera-a", "file": "raw/camera-a.mp4", "role": "primary", "cfr": true}`. Roles: `primary` (talking-head take), `interview` (a recorded braindump session; the creator reads each question aloud as "Question from Claude: ..." so the cut stage can segment it mechanically), `screen` (screen share). Stages that ingest media append here.
+- `sources` (optional) registers media inputs as they arrive: `{"id": "camera-a", "file": "raw/camera-a.mp4", "role": "primary", "cfr": true}`. Roles: `primary` (talking-head take), `interview` (a recorded braindump session; the creator reads each question aloud prefixed with the marker cue so the cut stage can segment it mechanically; the default cue is "question from the interviewer", configurable via cutplan.py `--marker-cues` and the setup interview; the older "question from claude" phrasing remains a documented alternative for studios that recorded with it), `screen` (screen share). Stages that ingest media append here.
 
 ## The stage skill algorithm
 
@@ -80,9 +82,9 @@ If the config exists but a key this stage needs is missing or empty, ask for jus
 ## Gate behavior
 
 - Gate 1 (outline): the creator approves hook + outline + the title/thumbnail promise before any script is written.
-- Gate 2 (cutplan): the creator approves the cut plan summary (the taste calls, e.g. "trailing 'so' at 42:20, keep or cut?") before the exported timeline is treated as the rough cut.
+- Gate 2 (cutplan): the creator approves the cut plan summary (the taste calls, e.g. "trailing 'so' at 42:20, keep or cut?") before the preview render and the exported timeline are treated as the rough cut.
 - Gate 3 (beats): the creator approves the beat table before any graphics code is written.
-- Gate 4 (final): the creator renders and approves in their editor. The suite never bakes the final.
+- Gate 4 (final): Manticore offers the final-quality render (`renders/final.mp4`) and the creator approves the deliverable. Finishing in their own editor from the always-exported timeline is an equally supported path; approval of either closes the gate. Either way the timeline export, edl.json, cutplan, and overlay assets already exist, so switching paths never loses work.
 
 ## Engine policy
 
@@ -94,12 +96,23 @@ If the config exists but a key this stage needs is missing or empty, ask for jus
 
 ## The beat table (engine-neutral graphics contract)
 
-One row per graphic beat, produced by mc-beats, consumed by mc-graphics regardless of engine:
+One row per graphic beat, produced by mc-beats, consumed by mc-graphics and mc-assets regardless of engine:
 
-| id | start | dur | end | anchor word | anchor ts | spoken phrase | composition |
-|---|---|---|---|---|---|---|---|
+| id | start | dur | end | anchor word | anchor ts | spoken phrase | type | engine | asset | composition |
+|---|---|---|---|---|---|---|---|---|---|---|
+
+Column rules:
+
+- `type` is a beat type from the format profile's `beat-types` frontmatter list (e.g. `lower-third`, `diagram`, `stat-card`, `cta`); the profile is the single type vocabulary for its format. The reserved placeholder `overlay` is legal only when reading legacy tables (tolerance rule below) and is never written.
+- `engine` names the engine that renders the beat, per the Engine policy below (e.g. `hyperframes`, `remotion`, `ograf`, `html`).
+- `asset` is `null` or a farmed-asset id from `assets/manifest.json`; mc-assets farms the listed assets, mc-graphics composes with them.
+- Tolerance rule: consumers MUST accept rows missing `type`, `engine`, or `asset` (beat tables written by 0.x projects). Treat a missing `type` as the reserved placeholder `overlay` (informational only; rendering keys off `engine` and `composition`), a missing `engine` as the Engine policy default, and a missing `asset` as `null`. A stage that rewrites the table (mc-beats) replaces every `overlay` placeholder with a type from the profile's `beat-types`. An in-flight 0.x project never breaks on the extended contract.
 
 Anchors are measured against the EDITED timeline defined by `cut/edl.json`, not the raw take.
+
+## Blessed-slot convention
+
+Deliverable folders hold exactly one blessed asset per slot; alternates, drafts, and retries live in a `work/` folder beside them. The pattern for mc-package: candidates accumulate in `packaging/thumbs/` and `packaging/titles.md`; after the creator picks, exactly one blessed asset per slot is written to `packaging/final/` and recorded in `artifacts` in project.json. Any stage producing a pick-one-of-N deliverable follows the same rule: the deliverable path is unambiguous, the exploration stays in `work/`.
 
 ## Cutting rules
 

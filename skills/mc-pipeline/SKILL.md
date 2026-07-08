@@ -15,8 +15,10 @@ The manager. Contains no creativity and makes no taste calls.
    - current `stage` and what artifact it produces,
    - any approval sitting at `"pending"` (the creator owes a decision; nothing moves until they give it),
    - artifacts produced so far.
-4. Route: name the mc-* skill for the current stage (see the stage table in PIPELINE.md) and invoke it if the creator asked to proceed.
-5. If the stage owner is the creator (record, final), say exactly what they need to do and stop.
+4. Route: name the mc-* skill for the current stage (see the stage table in PIPELINE.md) and invoke it if the creator asked to proceed. Route by the project's own `stages` array, never the master list: footage-first projects (created by mc-new's ingest mode) carry the ingest-first list (`new`, `cut`, `beats`, `graphics`, `assets`, `package`, `final`, `retro`) and never visit the ideation stages. One standing extra hop: when the graphics stage completes (mc-graphics hands back with `graphics/` holding rendered overlays), route through mc-cut's composited preview re-render (its "Composited preview (after graphics)" section) before invoking the next stage skill, and again whenever an overlay is later re-rendered.
+5. If the stage owner is the creator:
+   - record: say exactly what they need to do (record takes at constant frame rate into `raw/`) and stop.
+   - final: branch on `[render]` `self-render` in the studio config. When true (the default), route to mc-cut's offered renders: the fast low-res preview for iteration and the final-quality render offer at gate 4. When false, the finish is editor-only: point the creator at the always-exported timeline and assets (edl.json, cutplan, overlays, the timeline file per `[editor]` timeline-format) and stop. Either way gate 4 closes only on the creator's recorded approval of a deliverable.
 
 ## Rules
 

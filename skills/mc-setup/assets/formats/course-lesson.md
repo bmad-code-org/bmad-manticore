@@ -4,6 +4,12 @@ stages: [new, braindump, outline, script, record, cut, beats, graphics, package,
 engine_overlays: hyperframes
 engine_stingers: remotion
 generated_broll: banned
+beat-types: [lower-third, title-card, step-counter, definition-card, checkpoint-slide, list-build, diagram, screenshot-callout, recap-card, cta]
+density:
+  high: "10-20s"
+  medium: "20-45s"
+  low: "45-90s"
+  note: "Seconds per graphic beat. Front-loaded: open at the dense end of the tier range and relax toward the slow end as the video settles. The graphics-frequency tier in [style] selects the row; the shipped default is medium."
 ---
 
 # Format: course-lesson
@@ -14,9 +20,10 @@ Talking-head profile adapted for course/lesson content. The first five lessons a
 
 - Teach one capability per lesson; the outline states what the learner can DO afterward, not what topics are covered.
 - Recap and forward-reference beats: each lesson opens anchored to the previous one and closes pointing at the next.
-- Denser on-screen structure than main channel videos: numbered steps, definition cards, and checkpoint slides are standard beat types.
+- More on-screen structure than main channel videos: numbered steps, definition cards, and checkpoint slides are standard beat types (density itself follows the frontmatter tiers).
 - No packaging-driven hooks. Lessons open with orientation, not tension.
 - Real UI only; generated b-roll banned (lessons are tutorials at heart).
+- Creativity: conservative. Lessons in a course must look like siblings; reuse templates before inventing, vary content not treatment. (mc-retro tunes this line per format.)
 
 ## Engine defaults
 

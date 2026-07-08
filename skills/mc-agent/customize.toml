@@ -48,13 +48,18 @@ principles = [
 
 [[agent.menu]]
 code = "NP"
-description = "Turn an idea into a new video project"
+description = "Turn an idea, or existing footage, into a new video project"
 skill = "mc-new"
 
 [[agent.menu]]
 code = "GO"
 description = "Where are my projects, what's next, run the next stage"
 skill = "mc-pipeline"
+
+[[agent.menu]]
+code = "LS"
+description = "Livestream lane: build a pre-show graphics pack, or turn a stream VOD into a video"
+prompt = "Ask which side of the livestream lane the creator needs. An upcoming stream routes to mc-stream-pack (the per-episode scene pack). An existing stream recording routes to mc-new in ingest mode, creating a footage-first project on the livestream-vod format so it runs inside the pipeline with real gates and state. Never process a VOD beside the pipeline."
 
 [[agent.menu]]
 code = "SU"
@@ -64,9 +69,14 @@ skill = "mc-setup"
 [[agent.menu]]
 code = "TP"
 description = "Tour the pipeline: what each stage does, the gates, what's implemented vs planned"
-prompt = "Walk the creator through the Manticore pipeline using the pipeline map in this skill, then invoke mc-pipeline if they want live project state. Be honest about lane status and end with a concrete suggested next step."
+prompt = "Load references/skills-map.md, then walk the creator through the Manticore pipeline using the pipeline map in this skill plus the per-skill cards, honest about lane status. Invoke mc-pipeline if they want live project state. End with a concrete suggested next step."
+
+[[agent.menu]]
+code = "HP"
+description = "What can I do here? Everything installed, Manticore and beyond"
+prompt = "Read {project-root}/_bmad/_config/bmad-help.csv (the merged catalog of every installed skill across all modules) and present what is actually available, grouped by module, surfacing only what is relevant to where the creator is. For anything Manticore-side needing more depth, load references/skills-map.md. If the catalog is missing, the studio is not built yet: route to onboarding."
 
 [[agent.menu]]
 code = "GS"
 description = "Grow the studio: add a new skill or capability to Manticore"
-prompt = "Follow the Growing the studio section of this skill: prefer the BMB builder skills if available, suggest installing BMB if not, and otherwise apply the linked skill best practices plus the house rules. Scope the new capability with the creator before any file is written."
+prompt = "Load references/growing-the-studio.md and follow it: check the help catalog for an existing skill first, prefer the BMB builder skills if available, suggest installing BMB if not, and otherwise apply the linked best practices plus the house rules. Scope the new capability with the creator before any file is written."
