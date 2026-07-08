@@ -1,0 +1,132 @@
+name: Release
+
+# Manual release: bumps the version in .claude-plugin/marketplace.json,
+# commits, tags vX.Y.Z, keyless-signs the tag SHA with cosign, and creates
+# the GitHub Release with the matching CHANGELOG section as notes.
+# Run from main only. The quality gates run first; a red gate stops the release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump type"
+        required: true
+        default: "patch"
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  release:
+    if: github.repository == 'bmad-code-org/bmad-manticore' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install ffmpeg and rsvg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg librsvg2-bin
+
+      - name: Run all skill test suites
+        run: |
+          set -e
+          fail=0
+          for t in $(find skills -path "*/tests/test-*.py" | sort); do
+            uv run "$t" || { echo "FAIL: $t"; fail=1; }
+          done
+          exit $fail
+
+      - name: Genericity release gate
+        run: uv run skills/mc-setup/scripts/lint_genericity.py skills/ docs/ README.md CHANGELOG.md
+
+      - name: Configure git user
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version in marketplace.json
+        id: version
+        run: |
+          python3 - "${{ inputs.bump }}" <<'EOF'
+          import json, sys
+          bump = sys.argv[1]
+          path = ".claude-plugin/marketplace.json"
+          data = json.load(open(path))
+          plugin = data["plugins"][0]
+          major, minor, patch = (int(x) for x in plugin["version"].split("."))
+          if bump == "major":
+              major, minor, patch = major + 1, 0, 0
+          elif bump == "minor":
+              minor, patch = minor + 1, 0
+          else:
+              patch += 1
+          plugin["version"] = f"{major}.{minor}.{patch}"
+          with open(path, "w") as f:
+              json.dump(data, f, indent=2)
+              f.write("\n")
+          print(plugin["version"])
+          EOF
+          VERSION=$(python3 -c "import json; print(json.load(open('.claude-plugin/marketplace.json'))['plugins'][0]['version'])")
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit, tag, and push
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          git add .claude-plugin/marketplace.json
+          git commit -m "chore(release): ${TAG} [skip ci]"
+          git tag -a "${TAG}" -m "BMad Manticore ${{ steps.version.outputs.version }}"
+          git push origin main --follow-tags
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign tag SHA with cosign (keyless)
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          SHA=$(git rev-parse "${TAG}")
+          printf '%s' "${SHA}" > "${TAG}.sha"
+          cosign sign-blob --yes \
+            --output-signature "${TAG}.sig" \
+            --output-certificate "${TAG}.pem" \
+            "${TAG}.sha"
+
+      - name: Extract CHANGELOG section
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          awk -v ver="$VERSION" '
+            $0 ~ "^## " ver { on=1; next }
+            on && /^## / { exit }
+            on { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "No CHANGELOG section for ${VERSION}; using a pointer." > release-notes.md
+            echo "See CHANGELOG.md." >> release-notes.md
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          gh release create "${TAG}" \
+            --title "BMad Manticore ${{ steps.version.outputs.version }}" \
+            --notes-file release-notes.md \
+            "${TAG}.sha" "${TAG}.sig" "${TAG}.pem"
