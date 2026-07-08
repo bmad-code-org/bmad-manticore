@@ -1,0 +1,46 @@
+name: Quality & Validation
+
+# Runs the module's own gates on every PR:
+# - every skill test suite (uv run, PEP 723; ffmpeg and chromium installed
+#   so the render and HTML-graphics suites exercise instead of skip)
+# - the genericity release gate (nothing user-, brand-, or show-specific ships)
+
+"on":
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install ffmpeg and rsvg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg librsvg2-bin
+
+      - name: Install chromium for the HTML graphics lane
+        run: uv run skills/mc-graphics/scripts/html_to_png.py --install-chromium
+        continue-on-error: true
+
+      - name: Run all skill test suites
+        run: |
+          set -e
+          fail=0
+          for t in $(find skills -path "*/tests/test-*.py" | sort); do
+            echo "=== $t"
+            if ! uv run "$t"; then
+              echo "FAIL: $t"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Genericity release gate
+        run: uv run skills/mc-setup/scripts/lint_genericity.py skills/ docs/ README.md CHANGELOG.md
