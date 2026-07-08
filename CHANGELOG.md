@@ -2,6 +2,13 @@
 
 All notable changes to BMad Manticore are documented here. Dates are ISO (YYYY-MM-DD).
 
+## 1.0.1 - 2026-07-07
+
+### Fixed
+
+- 0.x migration now refreshes the creator's existing format profiles: the new `merge_profile_frontmatter.py` adds the frontmatter keys introduced in 1.0 (`beat-types`, `density`) that mc-beats requires, copying them from the shipped profiles without touching the creator's own key values, prose, or Learnings. Previously the never-overwrite rule left 0.x profiles missing keys the 1.0 stages need.
+- 0.x migration offers to move a pre-1.0 brand-root series template (for example `thumbnail-template.md`) into `{brand-path}/templates/<series>.md`, where mc-package's series contract looks for it.
+
 ## 1.0.0 - 2026-07-07
 
 ### Breaking changes
