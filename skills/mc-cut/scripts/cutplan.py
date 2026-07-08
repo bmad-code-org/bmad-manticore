@@ -47,9 +47,12 @@ Detectors (all pure stdlib):
               (default 16) words -- the EARLIER occurrence is the candidate.
               severity high.
     marker    interview-mode cue: any marker phrase (default "question from
-              claude") in the normalized word stream; marks a segment boundary
-              (the creator read an interviewer question aloud on camera).
-              severity med. --marker-cues overrides the list.
+              the interviewer") in the normalized word stream; marks a segment
+              boundary (the creator read an interviewer question aloud on
+              camera). severity med. --marker-cues overrides the list
+              (comma-separated, so several phrases can be active at once);
+              projects recorded against the older "question from claude"
+              convention pass --marker-cues "question from claude".
 
 CLI:
     positional  words.json
@@ -57,7 +60,9 @@ CLI:
     --min-silence FLOAT     (default 0.7)
     --retake-window INT     (default 16)
     --retake-run INT        (default 3)
-    --marker-cues STR       comma-separated override (default "question from claude")
+    --marker-cues STR       comma-separated override (default "question from
+                            the interviewer"; the legacy phrase "question from
+                            claude" is a supported alternative)
     exit 0 ok, 1 failure, 2 usage error. A JSON summary (counts + output path)
     is printed to stdout.
 """
@@ -319,8 +324,9 @@ def main(argv=None):
     p.add_argument("--min-silence", type=float, default=0.7)
     p.add_argument("--retake-window", type=int, default=16)
     p.add_argument("--retake-run", type=int, default=3)
-    p.add_argument("--marker-cues", default="question from claude",
-                   help="comma-separated marker phrases")
+    p.add_argument("--marker-cues", default="question from the interviewer",
+                   help='comma-separated marker phrases (legacy alternative: '
+                        '"question from claude")')
     args = p.parse_args(argv)
 
     try:

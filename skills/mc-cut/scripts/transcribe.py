@@ -36,8 +36,11 @@ Contract:
               switch. parakeet-mlx is the reference and the default: free, local
               on Apple Silicon, native word timestamps, and empirically it keeps
               verbatim fillers ("uh", "um", "Hmm") that cutting depends on.
-              elevenlabs-scribe and deepgram-nova3 are possible future lanes
-              (API alternatives) behind --provider; not implemented here.
+              Metered API providers (for example elevenlabs-scribe or
+              deepgram-nova3) are possible future OPT-IN lanes behind
+              --provider and the [transcription] switch; none is implemented
+              here, nothing defaults to them, and no API key name ships in
+              any default.
 
 Why parakeet-mlx over generic Whisper: cutting needs verbatim fillers ("um",
 "uh", restarts) plus word gap data; Whisper normalizes exactly those away.

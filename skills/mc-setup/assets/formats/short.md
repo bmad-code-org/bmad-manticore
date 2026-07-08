@@ -4,6 +4,12 @@ stages: [new, cut, beats, graphics, package, final, retro]
 engine_overlays: remotion
 engine_stingers: none
 generated_broll: allowed
+beat-types: [karaoke-caption, hook-text, keyword-pop, screenshot-callout, cta]
+density:
+  high: "10-20s"
+  medium: "20-45s"
+  low: "45-90s"
+  note: "Seconds per graphic beat. Front-loaded: open at the dense end of the tier range and relax toward the slow end as the video settles. The graphics-frequency tier in [style] selects the row; the shipped default is medium."
 ---
 
 # Format: short
@@ -16,6 +22,7 @@ generated_broll: allowed
 - Karaoke captions always on (word-level highlight, from the transcript).
 - One idea per short. If the source segment contains two, make two shorts.
 - First 1.5 seconds must contain motion and the hook words on screen.
+- Creativity: playful. High energy and pattern breaks are welcome; anything that keeps the eye moving, inside the brand system. (mc-retro tunes this line per format.)
 
 ## Engine defaults
 

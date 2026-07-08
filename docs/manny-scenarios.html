@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Working with Manny</title>
+<style>
+  :root{
+    --ink:#1A1310;        /* warm charcoal near-black */
+    --ink-2:#221812;      /* card charcoal */
+    --ink-3:#2C201A;      /* raised charcoal */
+    --red:#E0522F;        /* sunset red */
+    --amber:#E89A3C;      /* amber */
+    --gold:#F2C36B;       /* gold */
+    --cream:#F5EBDC;      /* warm cream text */
+    --cream-dim:#C9B9A6;  /* muted cream */
+    --line:rgba(242,195,107,.20);
+    --sprocket:20px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{
+    background:var(--ink);
+    color:var(--cream);
+    font-family:var(--font);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+
+  /* ---- Film grain + vignette, CSS only, fixed over everything ---- */
+  body::before{ /* grain */
+    content:"";
+    position:fixed; inset:0; z-index:60; pointer-events:none;
+    opacity:.05; mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  body::after{ /* vignette */
+    content:"";
+    position:fixed; inset:0; z-index:59; pointer-events:none;
+    background:radial-gradient(120% 90% at 50% 42%, transparent 52%, rgba(0,0,0,.55) 100%);
+  }
+
+  /* ---- Fixed film-strip rails on the viewport edges ---- */
+  .rail{
+    position:fixed; top:0; bottom:0; width:var(--sprocket); z-index:40; pointer-events:none;
+    background:
+      repeating-linear-gradient(
+        to bottom,
+        transparent 0 14px,
+        rgba(0,0,0,.55) 14px 28px
+      ),
+      linear-gradient(var(--ink-3), var(--ink-3));
+  }
+  .rail::before{
+    content:"";
+    position:absolute; top:0; bottom:0; width:8px;
+    background:repeating-linear-gradient(
+      to bottom,
+      #0c0806 0 12px,
+      var(--cream) 12px 20px,
+      #0c0806 20px 30px
+    );
+    opacity:.85; border-radius:2px;
+  }
+  .rail.left{ left:0; border-right:1px solid rgba(0,0,0,.6); }
+  .rail.left::before{ left:6px; }
+  .rail.right{ right:0; border-left:1px solid rgba(0,0,0,.6); }
+  .rail.right::before{ right:6px; }
+  @media (max-width:720px){ .rail{ display:none; } }
+
+  /* ---- Deck / slides ---- */
+  .deck{
+    height:100vh; overflow-y:scroll; overflow-x:hidden;
+    scroll-snap-type:y mandatory;
+    scroll-behavior:smooth;
+    padding:0 var(--sprocket);
+  }
+  @media (max-width:720px){ .deck{ padding:0; } }
+  .deck::-webkit-scrollbar{ width:0; height:0; }
+
+  .slide{
+    min-height:100vh;
+    scroll-snap-align:start;
+    scroll-snap-stop:always;
+    display:flex; align-items:center; justify-content:center;
+    position:relative;
+    padding:clamp(40px,7vh,64px) clamp(20px,5vw,80px);
+  }
+  @media (max-height:760px){ .hero-cell{ max-height:66vh; } }
+  .inner{ width:100%; max-width:1120px; }
+
+  /* kickers / headings */
+  .kicker{
+    display:inline-block;
+    font-size:12px; letter-spacing:.28em; text-transform:uppercase;
+    color:var(--amber); font-weight:700;
+    padding:5px 12px; border:1px solid var(--line); border-radius:2px;
+    margin-bottom:18px;
+  }
+  h1{
+    font-size:clamp(38px,7vw,80px); line-height:1.02; font-weight:800;
+    letter-spacing:-.02em;
+    background:linear-gradient(100deg, var(--gold), var(--amber) 45%, var(--red));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  h2{ font-size:clamp(28px,4.4vw,48px); line-height:1.05; font-weight:800; letter-spacing:-.015em; }
+  h2 .accent{ color:var(--amber); }
+  .sub{ color:var(--cream-dim); font-size:clamp(15px,1.7vw,19px); margin-top:12px; max-width:60ch; }
+
+  /* ---------- Slide 1: title ---------- */
+  .title-grid{ display:grid; grid-template-columns:1.15fr .85fr; gap:clamp(24px,4vw,56px); align-items:center; }
+  @media (max-width:860px){ .title-grid{ grid-template-columns:1fr; } }
+  .title-copy .tagline{ font-size:clamp(17px,2.1vw,23px); color:var(--cream); margin-top:22px; max-width:26ch; font-weight:500; }
+  .title-copy .byline{ color:var(--cream-dim); margin-top:20px; font-size:15px; }
+  .hero-cell{
+    position:relative; border-radius:6px; overflow:hidden;
+    aspect-ratio:3/4; max-height:74vh; background:#120c09;
+    border:1px solid var(--line);
+    box-shadow:0 30px 80px rgba(0,0,0,.6);
+  }
+  .hero-cell img, .band img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .hero-cell::after{
+    content:""; position:absolute; inset:0;
+    background:linear-gradient(180deg, transparent 55%, rgba(20,12,8,.65));
+  }
+  .frame-corners::before, .frame-corners::after{
+    content:""; position:absolute; width:26px; height:26px; z-index:2; pointer-events:none;
+    border:2px solid var(--gold); opacity:.8;
+  }
+  .frame-corners::before{ top:12px; left:12px; border-right:0; border-bottom:0; }
+  .frame-corners::after{ bottom:12px; right:12px; border-left:0; border-top:0; }
+
+  .pills{ margin-top:26px; display:flex; flex-wrap:wrap; gap:10px; }
+  .pill{
+    font-size:12.5px; color:var(--cream); background:var(--ink-3);
+    border:1px solid var(--line); border-radius:999px; padding:7px 14px;
+  }
+  .pill b{ color:var(--gold); font-weight:700; }
+
+  /* ---------- Meet Manny ---------- */
+  .meet-grid{ display:grid; grid-template-columns:.9fr 1.1fr; gap:clamp(24px,4vw,52px); align-items:center; }
+  @media (max-width:860px){ .meet-grid{ grid-template-columns:1fr; } }
+  .creed{ display:grid; gap:16px; margin-top:26px; }
+  .creed .item{
+    display:grid; grid-template-columns:auto 1fr; gap:16px; align-items:start;
+    background:var(--ink-2); border:1px solid var(--line); border-left:3px solid var(--red);
+    border-radius:4px; padding:16px 18px;
+  }
+  .creed .num{
+    font-size:14px; font-weight:800; color:var(--ink);
+    background:linear-gradient(var(--gold),var(--amber));
+    width:30px; height:30px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; flex:0 0 auto;
+  }
+  .creed h3{ font-size:16px; margin-bottom:3px; color:var(--gold); }
+  .creed p{ font-size:14px; color:var(--cream-dim); }
+
+  /* ---------- Scenario slides ---------- */
+  .scene-head{ margin-bottom:22px; }
+  .scene-head.has-badge{ display:flex; align-items:center; gap:18px; }
+  .manny-badge{
+    width:66px; height:66px; border-radius:50%; overflow:hidden; flex:0 0 auto;
+    border:2px solid var(--gold); position:relative;
+    box-shadow:0 8px 22px rgba(0,0,0,.55), 0 0 0 4px var(--ink-3);
+  }
+  .manny-badge img{ width:100%; height:100%; object-fit:cover; object-position:50% 36%; display:block; }
+  .manny-badge::after{ content:""; position:absolute; inset:0; border-radius:50%; box-shadow:inset 0 0 14px rgba(0,0,0,.5); }
+  @media (max-width:560px){ .manny-badge{ width:52px; height:52px; } }
+  .say{
+    display:flex; align-items:flex-start; gap:14px; margin-bottom:22px; max-width:66ch;
+  }
+  .say .avatar{
+    flex:0 0 auto; width:38px; height:38px; border-radius:50%;
+    background:linear-gradient(140deg,var(--amber),var(--red));
+    display:flex; align-items:center; justify-content:center; font-size:18px;
+    box-shadow:0 6px 18px rgba(224,82,47,.35);
+  }
+  .bubble{
+    position:relative;
+    background:linear-gradient(180deg,#33241c,#281c15);
+    border:1px solid var(--line);
+    border-radius:4px 16px 16px 16px;
+    padding:14px 20px;
+    font-size:clamp(16px,2vw,21px); font-weight:600; color:var(--cream);
+  }
+  .bubble .lab{ display:block; font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--amber); font-weight:700; margin-bottom:5px; }
+  .bubble::before{
+    content:""; position:absolute; left:-8px; top:14px;
+    width:14px; height:14px; background:#33241c; border-left:1px solid var(--line); border-bottom:1px solid var(--line);
+    transform:rotate(45deg);
+  }
+
+  .frames{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  @media (max-width:860px){ .frames{ grid-template-columns:1fr; } }
+  .frame{
+    background:var(--ink-2); border:1px solid var(--line); border-radius:6px;
+    padding:16px 16px 18px; position:relative; overflow:hidden;
+  }
+  /* mini sprocket strip on top of each frame-cell */
+  .frame::before{
+    content:""; position:absolute; top:0; left:0; right:0; height:8px;
+    background:repeating-linear-gradient(to right, transparent 0 9px, rgba(0,0,0,.5) 9px 15px);
+    background-color:var(--ink-3);
+  }
+  .frame .flab{
+    display:inline-block; margin-top:8px; margin-bottom:12px;
+    font-size:11px; letter-spacing:.16em; text-transform:uppercase; font-weight:800;
+    padding:4px 10px; border-radius:3px;
+  }
+  .flab.does{ color:var(--ink); background:var(--amber); }
+  .flab.approve{ color:var(--ink); background:var(--gold); }
+  .flab.get{ color:var(--cream); background:var(--red); }
+  .frame ul{ list-style:none; display:grid; gap:9px; }
+  .frame li{ font-size:13.5px; color:var(--cream-dim); padding-left:18px; position:relative; line-height:1.45; }
+  .frame li::before{ content:""; position:absolute; left:2px; top:8px; width:6px; height:6px; border-radius:50%; background:var(--amber); }
+  .frame.approve li::before{ background:var(--gold); }
+  .frame.get li::before{ background:var(--red); }
+  .frame li b{ color:var(--cream); font-weight:700; }
+  .gate{
+    display:inline-block; font-size:11px; font-weight:800; color:var(--gold);
+    border:1px solid var(--line); border-radius:3px; padding:2px 7px; margin-right:4px;
+    background:rgba(242,195,107,.06);
+  }
+
+  /* two-lane variant (livestream) */
+  .lanes{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  @media (max-width:860px){ .lanes{ grid-template-columns:1fr; } }
+  .lane{ background:var(--ink-2); border:1px solid var(--line); border-radius:6px; padding:18px 18px 20px; }
+  .lane h3{ font-size:17px; color:var(--gold); margin-bottom:4px; }
+  .lane .say2{ font-size:14.5px; font-style:italic; color:var(--amber); margin:10px 0 14px; }
+  .lane .row{ font-size:13.5px; color:var(--cream-dim); margin-bottom:9px; padding-left:16px; position:relative; line-height:1.45; }
+  .lane .row::before{ content:""; position:absolute; left:0; top:8px; width:6px; height:6px; border-radius:50%; background:var(--red); }
+  .lane .row b{ color:var(--cream); }
+  .lane .tag{ font-size:11px; letter-spacing:.16em; text-transform:uppercase; font-weight:800; color:var(--red); }
+
+  /* ---------- Band divider image ---------- */
+  .band{
+    position:relative; border-radius:6px; overflow:hidden;
+    height:clamp(150px,24vh,290px); background:#120c09; border:1px solid var(--line);
+    margin-top:clamp(16px,3vh,26px); box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  .band::after{ content:""; position:absolute; inset:0; background:linear-gradient(90deg, rgba(20,12,8,.85), transparent 45%, rgba(20,12,8,.6)); }
+
+  /* ---------- Closing ---------- */
+  .close-grid{ display:grid; grid-template-columns:1.1fr .9fr; gap:clamp(24px,4vw,52px); align-items:center; }
+  @media (max-width:860px){ .close-grid{ grid-template-columns:1fr; } }
+  .cmd{
+    background:#0f0a07; border:1px solid var(--line); border-radius:6px;
+    padding:16px 18px; margin:20px 0; overflow-x:auto;
+  }
+  .cmd .lab{ font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--amber); font-weight:700; display:block; margin-bottom:8px; }
+  .cmd code{ font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:14px; color:var(--gold); white-space:nowrap; }
+  .then{ font-size:clamp(18px,2.4vw,26px); font-weight:700; margin:6px 0 4px; }
+  .then .accent{ color:var(--amber); }
+  .links{ display:flex; flex-wrap:wrap; gap:12px; margin-top:22px; }
+  .links a{
+    text-decoration:none; color:var(--cream); font-size:14px; font-weight:600;
+    background:var(--ink-3); border:1px solid var(--line); border-radius:999px; padding:9px 18px;
+    transition:border-color .2s, color .2s;
+  }
+  .links a:hover{ border-color:var(--gold); color:var(--gold); }
+
+  /* ---------- Fixed chrome: counter, dots, arrows ---------- */
+  .counter{
+    position:fixed; left:calc(var(--sprocket) + 22px); top:22px; z-index:50;
+    font-size:12px; letter-spacing:.2em; color:var(--cream-dim); font-weight:700;
+  }
+  .counter b{ color:var(--gold); }
+  .brandtag{
+    position:fixed; right:calc(var(--sprocket) + 22px); top:22px; z-index:50;
+    font-size:12px; letter-spacing:.24em; text-transform:uppercase; color:var(--amber); font-weight:700;
+  }
+  @media (max-width:720px){ .counter{ left:16px; } .brandtag{ display:none; } }
+
+  .dots{
+    position:fixed; right:calc(var(--sprocket) + 16px); top:50%; transform:translateY(-50%);
+    z-index:50; display:flex; flex-direction:column; gap:11px;
+  }
+  @media (max-width:720px){ .dots{ right:8px; } }
+  .dots button{
+    width:9px; height:9px; border-radius:50%; border:1px solid var(--amber);
+    background:transparent; cursor:pointer; padding:0; transition:all .2s;
+  }
+  .dots button.active{ background:var(--gold); border-color:var(--gold); transform:scale(1.35); box-shadow:0 0 10px rgba(242,195,107,.6); }
+
+  .arrows{ position:fixed; bottom:22px; left:50%; transform:translateX(-50%); z-index:50; display:flex; gap:12px; align-items:center; }
+  .arrows button{
+    width:44px; height:44px; border-radius:50%; cursor:pointer;
+    background:var(--ink-3); border:1px solid var(--line); color:var(--gold);
+    font-size:18px; display:flex; align-items:center; justify-content:center;
+    transition:all .2s;
+  }
+  .arrows button:hover{ border-color:var(--gold); background:#3a2a1f; }
+  .arrows button:disabled{ opacity:.3; cursor:default; }
+  .hint{ font-size:11px; color:var(--cream-dim); letter-spacing:.1em; }
+  @media (max-width:720px){ .hint{ display:none; } }
+</style>
+</head>
+<body>
+
+<div class="rail left" aria-hidden="true"></div>
+<div class="rail right" aria-hidden="true"></div>
+
+<div class="counter"><b id="cnum">01</b> / 09</div>
+<div class="brandtag">BMad Manticore</div>
+
+<nav class="dots" id="dots" aria-label="Slide navigation"></nav>
+
+<div class="arrows">
+  <button id="prev" aria-label="Previous slide">&#8249;</button>
+  <span class="hint">arrow keys</span>
+  <button id="next" aria-label="Next slide">&#8250;</button>
+</div>
+
+<main class="deck" id="deck">
+
+  <!-- 1. TITLE -->
+  <section class="slide" data-name="Title">
+    <div class="inner title-grid">
+      <div class="title-copy">
+        <span class="kicker">A tutorial in six scenarios</span>
+        <h1>Working<br>with Manny</h1>
+        <p class="tagline">From brain dump to a rendered, graphics-rich video, in your own words.</p>
+        <div class="pills">
+          <span class="pill"><b>You talk.</b> He routes.</span>
+          <span class="pill"><b>4 gates</b> you always control</span>
+          <span class="pill">A <b>preview render</b> every step</span>
+        </div>
+        <p class="byline">Manny the Manticore fronts an AI video production pipeline, shipped as Claude skills.</p>
+      </div>
+      <div class="hero-cell frame-corners">
+        <img src="assets/manny/feature-01-rearing-hero.jpg"
+             alt="Manny the Manticore rearing on a clifftop above a waterfall at red sunset, wings spread">
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. MEET MANNY -->
+  <section class="slide" data-name="Meet Manny">
+    <div class="inner meet-grid">
+      <div class="hero-cell frame-corners" style="aspect-ratio:4/5;">
+        <img src="assets/manny/feature-02-director-closeup.jpg"
+             alt="Close portrait of Manny the Manticore, a winged lion with a scorpion tail, lit by sunset">
+      </div>
+      <div>
+        <span class="kicker">Meet Manny</span>
+        <h2>The studio's <span class="accent">front door</span></h2>
+        <p class="sub">You never memorize which skill does what. You walk onto the set, you say what you want, and the director takes it from there.</p>
+        <div class="creed">
+          <div class="item">
+            <span class="num">1</span>
+            <div><h3>You just talk</h3><p>Manny turns ideas into projects, routes footage you already have, and drives every stage. The skills stay backstage.</p></div>
+          </div>
+          <div class="item">
+            <span class="num">2</span>
+            <div><h3>Four gates, all yours</h3><p>Outline, cut plan, beats, and final are hard stops. The pipeline presents its work and waits. Nothing proceeds without your say-so.</p></div>
+          </div>
+          <div class="item">
+            <span class="num">3</span>
+            <div><h3>It renders, always</h3><p>A watchable preview every iteration, a final render offered at the end, and your editor timeline written alongside so you can jump into your own tools any time.</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. SETUP DAY -->
+  <section class="slide" data-name="Setup day">
+    <div class="inner">
+      <div class="scene-head has-badge">
+        <span class="manny-badge"><img src="assets/manny/banner-02-clifftop-clapperboard.jpg" alt="Manny the Manticore on a clifftop clapperboard rock"></span>
+        <div class="sh-text">
+          <span class="kicker">Scenario 01 &nbsp;&middot;&nbsp; Setup day</span>
+          <h2>The <span class="accent">onboarding interview</span></h2>
+        </div>
+      </div>
+      <div class="say">
+        <span class="avatar">&#127916;</span>
+        <div class="bubble"><span class="lab">You say, on a fresh install</span>Talk to Manny.</div>
+      </div>
+      <div class="frames">
+        <div class="frame does">
+          <span class="flab does">Manny does</span>
+          <ul>
+            <li>Notices the studio is not built yet and routes you to <b>mc-setup</b></li>
+            <li>Checks dependencies and your platform (uv, ffmpeg, node, git)</li>
+            <li>Interviews you: identity, editor, <b>render consent</b>, and a video style pass that seeds your <b>Production Bible</b></li>
+            <li>Asks for creators you want to emulate (drop video links) and echoes back the takeaway for you to confirm</li>
+            <li>Builds your brand, indexes your headshots, runs a guided <b>voice bible</b>, registers your tools</li>
+          </ul>
+        </div>
+        <div class="frame approve">
+          <span class="flab approve">You approve</span>
+          <ul>
+            <li>Any dependency installs before they run</li>
+            <li>Your render-first default (preview every iteration, final offered)</li>
+            <li>Visual density, image-type policy, and CTA appetite</li>
+            <li>Which sources feed the voice bible</li>
+          </ul>
+        </div>
+        <div class="frame get">
+          <span class="flab get">You get</span>
+          <ul>
+            <li>A configured studio the whole pipeline reads</li>
+            <li>Production Bible, voice bible, brand tokens, blacklist</li>
+            <li>Approved, expression-indexed headshots</li>
+            <li>An honest runnability report of what is ready and what is pending</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. IDEA-FIRST VIDEO -->
+  <section class="slide" data-name="Idea-first video">
+    <div class="inner">
+      <div class="scene-head has-badge">
+        <span class="manny-badge"><img src="assets/manny/banner-03-headon-lensflare.jpg" alt="Manny the Manticore diving head-on through a lens flare"></span>
+        <div class="sh-text">
+          <span class="kicker">Scenario 02 &nbsp;&middot;&nbsp; Talking head</span>
+          <h2>An idea in your head, <span class="accent">start to finish</span></h2>
+        </div>
+      </div>
+      <div class="say">
+        <span class="avatar">&#128161;</span>
+        <div class="bubble"><span class="lab">You say</span>Manny, I've got an idea for a video.</div>
+      </div>
+      <div class="frames">
+        <div class="frame does">
+          <span class="flab does">Manny does</span>
+          <ul>
+            <li>Scaffolds a talking-head project, then <b>brain dumps</b> with you until your phrasing repeats (camera optional)</li>
+            <li>Drafts hooks and an outline, then weaves the <b>script from your own words</b></li>
+            <li>After you record, cuts word-level, plans graphics beats and CTAs, farms assets, packages</li>
+          </ul>
+        </div>
+        <div class="frame approve">
+          <span class="flab approve">You approve</span>
+          <ul>
+            <li><span class="gate">Gate 1</span> hook and outline</li>
+            <li><span class="gate">Gate 2</span> the cut plan, with a preview render</li>
+            <li><span class="gate">Gate 3</span> the beat table and CTAs, riffed with you before they are written</li>
+            <li><span class="gate">Gate 4</span> the offered final render</li>
+          </ul>
+        </div>
+        <div class="frame get">
+          <span class="flab get">You get</span>
+          <ul>
+            <li>A script that sounds like you, because it is you</li>
+            <li>A watchable preview at every step</li>
+            <li>Brand-themed overlays and CTAs anchored to your words</li>
+            <li>A final render plus an always-written editor timeline</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. EXISTING FOOTAGE -->
+  <section class="slide" data-name="Existing footage">
+    <div class="inner">
+      <div class="scene-head has-badge">
+        <span class="manny-badge"><img src="assets/manny/feature-02-director-closeup.jpg" alt="Close portrait of Manny the Manticore"></span>
+        <div class="sh-text">
+          <span class="kicker">Scenario 03 &nbsp;&middot;&nbsp; Footage-first</span>
+          <h2>You already <span class="accent">have the footage</span></h2>
+        </div>
+      </div>
+      <div class="say">
+        <span class="avatar">&#127909;</span>
+        <div class="bubble"><span class="lab">You say</span>Make a video from this recording. I already have the take.</div>
+      </div>
+      <div class="frames">
+        <div class="frame does">
+          <span class="flab does">Manny does</span>
+          <ul>
+            <li>Routes to <b>ingest mode</b>: registers your source and skips ideation entirely</li>
+            <li>Starts the project <b>at the cut stage</b>, transcribing word-level with verbatim fillers</li>
+            <li>Cuts dead air and filler, marks chapters, then runs the same stages from cut onward</li>
+          </ul>
+        </div>
+        <div class="frame approve">
+          <span class="flab approve">You approve</span>
+          <ul>
+            <li><span class="gate">Gate 2</span> the cut plan, one taste call at a time</li>
+            <li><span class="gate">Gate 3</span> the beats and CTAs mined from the transcript</li>
+            <li><span class="gate">Gate 4</span> the offered final render</li>
+          </ul>
+        </div>
+        <div class="frame get">
+          <span class="flab get">You get</span>
+          <ul>
+            <li>A tight cut of a conference talk, raw take, or long recording</li>
+            <li>The same preview render and editor timeline exports</li>
+            <li>Graphics, packaging, and chapters, no re-shoot required</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. WEEKLY LIVESTREAM -->
+  <section class="slide" data-name="Weekly livestream">
+    <div class="inner">
+      <div class="scene-head">
+        <span class="kicker">Scenario 04 &nbsp;&middot;&nbsp; The weekly livestream</span>
+        <h2>Two lanes, <span class="accent">one show</span></h2>
+      </div>
+      <div class="lanes">
+        <div class="lane">
+          <span class="tag" style="color:var(--amber)">Before the stream</span>
+          <h3>The branded stream pack</h3>
+          <p class="say2">"Build me a stream pack for tonight."</p>
+          <p class="row"><b>Manny does:</b> routes to the stream-pack lane, a complete branded OBS asset pack</p>
+          <p class="row"><b>You approve:</b> the scene overlays and lower thirds against your brand</p>
+          <p class="row"><b>You get:</b> a ready-to-load OBS pack, click-to-trigger live graphics</p>
+        </div>
+        <div class="lane">
+          <span class="tag">After the stream</span>
+          <h3>The VOD lane</h3>
+          <p class="say2">"Turn last night's stream into a video."</p>
+          <p class="row"><b>Manny does:</b> footage-first ingest on the livestream-vod format, transcript analysis, light trim, CTA and overlay insertion per your Production Bible, shorts mining</p>
+          <p class="row"><b>You approve:</b> the same gates from the cut onward</p>
+          <p class="row"><b>You get:</b> a packaged VOD with dual-timeline chapters, plus mined shorts</p>
+        </div>
+      </div>
+      <div class="band" aria-hidden="false">
+        <img src="assets/manny/banner-01-flight-filmribbon.jpg"
+             alt="Manny in flight over a waterfall at sunset, a strip of film unspooling from his wing">
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. PACKAGING & THUMBNAILS -->
+  <section class="slide" data-name="Packaging">
+    <div class="inner">
+      <div class="scene-head has-badge">
+        <span class="manny-badge"><img src="assets/manny/banner-02-clifftop-clapperboard.jpg" alt="Manny the Manticore on a clifftop clapperboard rock"></span>
+        <div class="sh-text">
+          <span class="kicker">Scenario 05 &nbsp;&middot;&nbsp; Packaging</span>
+          <h2>Titles and <span class="accent">thumbnails that land</span></h2>
+        </div>
+      </div>
+      <div class="say">
+        <span class="avatar">&#127917;</span>
+        <div class="bubble"><span class="lab">You say</span>Let's nail the title and thumbnail before I forget.</div>
+      </div>
+      <div class="frames">
+        <div class="frame does">
+          <span class="flab does">Manny does</span>
+          <ul>
+            <li>Packaging can run any time after gate 1, so titles never pile up at the end</li>
+            <li>Builds <b>face-plus-hook thumbnails</b> from your approved headshots</li>
+            <li>For a series, generates <b>three title and thumbnail pairs</b> for A/B testing</li>
+            <li>Runs the <b>120px test</b>: if it does not read tiny, it does not ship</li>
+          </ul>
+        </div>
+        <div class="frame approve">
+          <span class="flab approve">You approve</span>
+          <ul>
+            <li>The winning title from the candidates</li>
+            <li>The thumbnail that reads at a glance</li>
+            <li>Description and chapters</li>
+          </ul>
+        </div>
+        <div class="frame get">
+          <span class="flab get">You get</span>
+          <ul>
+            <li><b>One blessed asset per slot</b>, alternates kept aside in work</li>
+            <li>A packaging promise you set before the script was written</li>
+            <li>Titles, thumbnail, description, and chapters, ready to publish</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. RETRO LOOP -->
+  <section class="slide" data-name="The retro loop">
+    <div class="inner">
+      <div class="scene-head has-badge">
+        <span class="manny-badge"><img src="assets/manny/banner-03-headon-lensflare.jpg" alt="Manny the Manticore diving head-on through a lens flare"></span>
+        <div class="sh-text">
+          <span class="kicker">Scenario 06 &nbsp;&middot;&nbsp; The retro loop</span>
+          <h2>The pipeline gets <span class="accent">smarter every video</span></h2>
+        </div>
+      </div>
+      <div class="say">
+        <span class="avatar">&#128200;</span>
+        <div class="bubble"><span class="lab">You say, after publishing</span>Here's what worked and what I'd change next time.</div>
+      </div>
+      <div class="frames">
+        <div class="frame does">
+          <span class="flab does">Manny does</span>
+          <ul>
+            <li>Routes each note to the file that <b>would have prevented it</b></li>
+            <li>Voice miss goes to the voice bible, a phrase you never say goes to the blacklist</li>
+            <li>Visual-style miss goes to the Production Bible, a structure miss to the format profile</li>
+            <li>Offers the post-publish wrap: archive hygiene, promoting evergreen assets</li>
+          </ul>
+        </div>
+        <div class="frame approve">
+          <span class="flab approve">You approve</span>
+          <ul>
+            <li>Each edit to your own taste files</li>
+            <li>The ratchet only turns one way: bibles and blacklists grow, gates never weaken</li>
+          </ul>
+        </div>
+        <div class="frame get">
+          <span class="flab get">You get</span>
+          <ul>
+            <li>Taste that lives in files and compounds with you</li>
+            <li>A next video that starts smarter than this one</li>
+            <li>A pipeline that gets cheaper to run without getting worse</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9. CLOSING -->
+  <section class="slide" data-name="Get started">
+    <div class="inner close-grid">
+      <div>
+        <span class="kicker">Roll camera</span>
+        <h2>Build <span class="accent">your studio</span></h2>
+        <p class="sub">Install once at the root of a dedicated content folder. One studio serves every video you make.</p>
+        <div class="cmd">
+          <span class="lab">Install</span>
+          <code>npx bmad-method install --custom-source https://github.com/bmad-code-org/bmad-manticore</code>
+        </div>
+        <p class="then">Then just say: <span class="accent">talk to Manny.</span></p>
+        <div class="links">
+          <a href="https://github.com/bmad-code-org/bmad-manticore">GitHub</a>
+          <a href="https://discord.gg/gk8jAdXWmj">Discord</a>
+          <a href="https://youtube.com/@BMadCode">YouTube</a>
+          <a href="https://bmadcode.com">bmadcode.com</a>
+        </div>
+      </div>
+      <div class="hero-cell frame-corners" style="aspect-ratio:16/11;">
+        <img src="assets/manny/banner-04-banking-swirl.jpg"
+             alt="Manny banking through the air at sunset as film frames swirl in his wake">
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  (function(){
+    var deck = document.getElementById('deck');
+    var slides = Array.prototype.slice.call(deck.querySelectorAll('.slide'));
+    var dotsWrap = document.getElementById('dots');
+    var cnum = document.getElementById('cnum');
+    var prev = document.getElementById('prev');
+    var next = document.getElementById('next');
+    var current = 0;
+
+    // build dots
+    slides.forEach(function(s, i){
+      var b = document.createElement('button');
+      b.setAttribute('aria-label', 'Go to slide ' + (i+1) + ': ' + (s.dataset.name||''));
+      b.addEventListener('click', function(){ go(i); });
+      dotsWrap.appendChild(b);
+    });
+    var dots = Array.prototype.slice.call(dotsWrap.children);
+
+    function pad(n){ return (n<9?'0':'') + (n+1); }
+
+    function setActive(i){
+      current = i;
+      cnum.textContent = pad(i);
+      dots.forEach(function(d,di){ d.classList.toggle('active', di===i); });
+      prev.disabled = (i===0);
+      next.disabled = (i===slides.length-1);
+    }
+
+    function go(i){
+      i = Math.max(0, Math.min(slides.length-1, i));
+      slides[i].scrollIntoView({behavior:'smooth', block:'start'});
+      setActive(i);
+    }
+
+    prev.addEventListener('click', function(){ go(current-1); });
+    next.addEventListener('click', function(){ go(current+1); });
+
+    document.addEventListener('keydown', function(e){
+      if(e.key==='ArrowRight' || e.key==='ArrowDown' || e.key===' ' || e.key==='PageDown'){ e.preventDefault(); go(current+1); }
+      else if(e.key==='ArrowLeft' || e.key==='ArrowUp' || e.key==='PageUp'){ e.preventDefault(); go(current-1); }
+      else if(e.key==='Home'){ e.preventDefault(); go(0); }
+      else if(e.key==='End'){ e.preventDefault(); go(slides.length-1); }
+    });
+
+    // track active slide on manual scroll
+    if('IntersectionObserver' in window){
+      var io = new IntersectionObserver(function(entries){
+        entries.forEach(function(en){
+          if(en.isIntersecting){
+            var idx = slides.indexOf(en.target);
+            if(idx>=0) setActive(idx);
+          }
+        });
+      }, {root:deck, threshold:0.55});
+      slides.forEach(function(s){ io.observe(s); });
+    }
+
+    setActive(0);
+  })();
+</script>
+</body>
+</html>

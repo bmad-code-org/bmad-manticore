@@ -18,3 +18,20 @@ activation_steps_append = []
 # Persistent facts held for the whole run: literal sentences, or
 # "file:{project-root}/..." paths whose contents are loaded as facts.
 persistent_facts = []
+
+[packaging]
+
+# Title+thumbnail candidates to present (series projects present them as
+# exactly this many A/B pairs).
+candidates = 3
+
+# Hard cap on on-image thumbnail hook words (face-plus-hook convention).
+hook-words-max = 4
+
+# Title length cap in characters (front-load what matters; longer gets cut
+# off in feeds).
+title-max-chars = 60
+
+# Proof width in pixels for the mandatory downscale verification
+# (verify_thumb.py). 120 approximates the smallest feed rendering.
+verify-width = 120

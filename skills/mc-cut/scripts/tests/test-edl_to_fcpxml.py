@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.11"
 # ///
-"""Tests for edl_to_fcpxml.py — the deterministic, ffprobe-free parts: the frame
+"""Tests for edl_to_fcpxml.py: the deterministic, ffprobe-free parts: the frame
 grid math (outward snapping, no float drift), the FCPXML document structure from
 a canned EDL with mocked probe data, and the format/exit-code switches.
 

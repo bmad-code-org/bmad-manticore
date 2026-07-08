@@ -6,8 +6,15 @@ Writes <dest>/<id>/ with:
   <id>.mjs          Web Component (deterministic render, NO self-registration)
   preview.html      local harness that registers + scrubs the graphic
 
-Every standard that produces a silent black clip in a renderer is baked in here,
-so callers should generate rather than hand-write. Stdlib only.
+The STRUCTURAL standards that produce a silent black clip in a renderer (no
+self-registration, type-keyed actionDurations, full non-real-time API,
+transparent host) are baked in here, so callers should generate rather than
+hand-write. Standards that live in the caller's own edits (deterministic
+render(tMs), hardened asset/font loads) still apply afterward. Stdlib only.
+
+Palette/font args should come from {brand-path}/tokens.json; any left at the
+placeholder defaults are reported in the JSON output as placeholder_palette
+so a placeholder look never ships unnoticed.
 
 Fields define the operator-editable config surface (the manifest schema). Pass as
 JSON:  --fields '[{"key":"title","title":"Title","default":"Guest Name"}]'
@@ -153,7 +160,12 @@ def main():
     except json.JSONDecodeError as e:
         sys.exit(f"generated manifest is invalid JSON: {e}")
 
-    print(json.dumps({
+    placeholder_defaults = {"accent": "#4F8CFF", "surface": "#1D1D1D",
+                            "muted": "#A8A8A8", "font": "system-ui, sans-serif"}
+    placeholders = sorted(k for k, v in placeholder_defaults.items()
+                          if getattr(args, k) == v)
+
+    out = {
         "ok": True,
         "package": str(pkg),
         "manifest": written[f"{gid}.ograf.json"],
@@ -162,7 +174,13 @@ def main():
         "fields": field_keys,
         "next": f"Edit {main_file} render(tMs) for your design, then: uv run scripts/verify_ograf.py {pkg} "
                 f"--width {args.width} --height {args.height} --duration {args.duration}",
-    }, indent=2))
+    }
+    if placeholders:
+        out["placeholder_palette"] = placeholders
+        out["warning"] = ("placeholder palette: --" + ", --".join(placeholders) +
+                          " left at module defaults; pass values from {brand-path}/tokens.json "
+                          "before this graphic ships")
+    print(json.dumps(out, indent=2))
 
 
 if __name__ == "__main__":

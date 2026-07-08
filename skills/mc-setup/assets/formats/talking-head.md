@@ -4,6 +4,12 @@ stages: [new, braindump, outline, script, record, cut, beats, graphics, assets, 
 engine_overlays: hyperframes
 engine_stingers: remotion
 generated_broll: allowed
+beat-types: [lower-third, title-card, keyword-pop, quote-card, list-build, stat-card, diagram, screenshot-callout, b-roll, cta]
+density:
+  high: "10-20s"
+  medium: "20-45s"
+  low: "45-90s"
+  note: "Seconds per graphic beat. Front-loaded: open at the dense end of the tier range and relax toward the slow end as the video settles. The graphics-frequency tier in [style] selects the row; the shipped default is medium."
 ---
 
 # Format: talking-head
@@ -15,7 +21,8 @@ The default for main channel videos. The creator on camera, graphics are overlay
 - The A-roll carries the video; graphics support the spoken word, never compete with it.
 - Overlay beats ride word anchors from the edited transcript. A graphic that is not tied to a spoken phrase does not exist.
 - Brand system throughout: overlays are alpha (no canvas color ever baked in); text and emphasis colors follow `{brand-path}/tokens.json` and its colorRules notes.
-- Density target: a graphic beat roughly every 20 to 45 seconds; long uninterrupted stretches are fine when the material carries itself.
+- Density follows the frontmatter tiers; the configured graphics-frequency tier is the target, not a ceiling to duck under.
+- Creativity: balanced. Vary beat type and composition across the video, staying inside the brand system and the frontmatter beat-types list. (mc-retro tunes this line per format.)
 
 ## Engine defaults
 

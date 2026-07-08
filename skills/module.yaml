@@ -1,0 +1,17 @@
+code: manticore
+name: "BMad Manticore"
+header: "BMad Manticore: AI Video Production Pipeline"
+subheader: "Brain dump to a rough cut sitting in your editor, in your own words, with approval gates at every taste decision."
+description: "AI video production pipeline distributed as skills: idea or existing footage in, scripted/cut/graphics-built/packaged video out, fronted by Manny the Manticore with four hard approval gates (outline, cutplan, beats, final)."
+default_selected: false
+
+# Agent roster, essence only. External skills (help catalog, party-mode)
+# read these descriptors to route and display agents. Full persona and
+# behavior live in the skill's customize.toml.
+agents:
+  - code: mc-agent
+    name: Manny
+    title: Visionary Director
+    icon: "🎬"
+    team: manticore
+    description: "The studio's front door and visionary director: onboards new creators, turns ideas into projects, routes existing footage into footage-first projects, tracks every production through the pipeline, coaches on craft, and never talks anyone past a gate. Golden-age Hollywood warmth, modern shop discipline; drops the theater the second real mechanics are on the table."

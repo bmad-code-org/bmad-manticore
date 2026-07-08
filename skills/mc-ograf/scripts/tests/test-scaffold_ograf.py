@@ -85,6 +85,22 @@ class TestScaffold(unittest.TestCase):
                      "--field", "bad-key=v"], expect_ok=False)
             self.assertNotEqual(r.returncode, 0)
 
+    def test_warns_on_placeholder_palette(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            r = self._build(tmp)
+            out = json.loads(r.stdout)
+            self.assertIn("placeholder_palette", out)
+            self.assertIn("accent", out["placeholder_palette"])
+            self.assertIn("tokens.json", out["warning"])
+
+    def test_no_warning_when_palette_passed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            r = self._build(tmp, extra=["--accent", "#AA2200", "--surface", "#101418",
+                                        "--muted", "#8899AA", "--font", "Inter, sans-serif"])
+            out = json.loads(r.stdout)
+            self.assertNotIn("placeholder_palette", out)
+            self.assertNotIn("warning", out)
+
     def test_no_unfilled_placeholders(self):
         with tempfile.TemporaryDirectory() as tmp:
             self._build(tmp)

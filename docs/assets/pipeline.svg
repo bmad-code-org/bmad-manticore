@@ -1,100 +1,163 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 470" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 1 L 9 5 L 0 9 z" fill="#B3A89E"/>
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#B39B7F"/>
     </marker>
-    <marker id="arrowCopper" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 1 L 9 5 L 0 9 z" fill="#C8824F"/>
+    <marker id="arrowAmber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#E89A3C"/>
     </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#E0522F"/>
+    </marker>
+    <pattern id="sprockets" width="26" height="10" patternUnits="userSpaceOnUse">
+      <rect width="26" height="10" fill="#120D0A"/>
+      <rect x="7" y="2.5" width="12" height="5" rx="2" fill="#2E2119"/>
+    </pattern>
+    <linearGradient id="sunset" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#33150F"/>
+      <stop offset="0.45" stop-color="#221410"/>
+      <stop offset="1" stop-color="#191210"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#E0522F" stop-opacity="0.38"/>
+      <stop offset="0.6" stop-color="#C73A28" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#C73A28" stop-opacity="0"/>
+    </radialGradient>
   </defs>
 
-  <!-- canvas -->
-  <rect x="0" y="0" width="1180" height="470" rx="16" fill="#122543"/>
-  <rect x="0.5" y="0.5" width="1179" height="469" rx="16" fill="none" stroke="#2A4068"/>
+  <!-- canvas: warm cinema charcoal with a low red sun -->
+  <rect x="0" y="0" width="1280" height="600" rx="18" fill="url(#sunset)"/>
+  <circle cx="1130" cy="70" r="150" fill="url(#sun)"/>
+  <rect x="0.5" y="0.5" width="1279" height="599" rx="18" fill="none" stroke="#3B2C20"/>
 
-  <!-- ══════════ row 1 ══════════ -->
+  <text x="40" y="44" fill="#F2C36B" font-size="15" font-weight="700" letter-spacing="3">HOW A VIDEO HAPPENS</text>
 
-  <!-- brain dump -->
-  <rect x="135" y="70" width="150" height="56" rx="12" fill="#1B3358" stroke="#2A4068"/>
-  <text x="210" y="94" text-anchor="middle" fill="#F4EFEA" font-size="16" font-weight="600">brain dump</text>
-  <text x="210" y="113" text-anchor="middle" fill="#B3A89E" font-size="11">your words, verbatim</text>
+  <!-- Manny, the projector at the front of the strip -->
+  <g>
+    <circle cx="62" cy="106" r="16" fill="none" stroke="#E89A3C" stroke-width="2"/>
+    <circle cx="98" cy="106" r="16" fill="none" stroke="#E89A3C" stroke-width="2"/>
+    <circle cx="62" cy="106" r="4" fill="#E89A3C"/>
+    <circle cx="98" cy="106" r="4" fill="#E89A3C"/>
+    <rect x="52" y="124" width="56" height="24" rx="6" fill="#2B211A" stroke="#4A3728"/>
+    <path d="M 108 130 L 132 126 L 132 146 L 108 142 Z" fill="#E89A3C" opacity="0.85"/>
+    <path d="M 132 128 L 158 118 L 158 154 L 132 144 Z" fill="#F2C36B" opacity="0.28"/>
+    <text x="80" y="172" text-anchor="middle" fill="#F5EBDC" font-size="13" font-weight="700">MANNY</text>
+    <text x="88" y="188" text-anchor="middle" fill="#B39B7F" font-size="10.5">the front door:</text>
+    <text x="88" y="202" text-anchor="middle" fill="#B39B7F" font-size="10.5">just say what you want</text>
+  </g>
 
-  <line x1="285" y1="98" x2="323" y2="98" stroke="#B3A89E" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- ═══════ film strip, reel 1: the idea lane ═══════ -->
+  <g>
+    <rect x="170" y="76" width="1070" height="118" rx="8" fill="#241B15" stroke="#3B2C20"/>
+    <rect x="170" y="80" width="1070" height="10" fill="url(#sprockets)"/>
+    <rect x="170" y="180" width="1070" height="10" fill="url(#sprockets)"/>
 
-  <!-- outline · gate 1 -->
-  <rect x="330" y="70" width="170" height="56" rx="12" fill="#1B3358" stroke="#B66D46" stroke-width="1.5"/>
-  <text x="415" y="94" text-anchor="middle" fill="#F4EFEA" font-size="16" font-weight="600">outline</text>
-  <text x="415" y="113" text-anchor="middle" fill="#C8824F" font-size="11" font-weight="700">GATE 1 · YOU APPROVE</text>
+    <!-- brain dump -->
+    <rect x="192" y="100" width="188" height="70" rx="6" fill="#2B211A" stroke="#4A3728"/>
+    <text x="286" y="130" text-anchor="middle" fill="#F5EBDC" font-size="16" font-weight="600">brain dump</text>
+    <text x="286" y="150" text-anchor="middle" fill="#B39B7F" font-size="11">your words, verbatim,</text>
+    <text x="286" y="163" text-anchor="middle" fill="#B39B7F" font-size="11">camera rolling if you like</text>
 
-  <line x1="500" y1="98" x2="538" y2="98" stroke="#B3A89E" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <line x1="380" y1="135" x2="408" y2="135" stroke="#B39B7F" stroke-width="1.5" marker-end="url(#arrow)"/>
 
-  <!-- script -->
-  <rect x="545" y="70" width="150" height="56" rx="12" fill="#1B3358" stroke="#2A4068"/>
-  <text x="620" y="94" text-anchor="middle" fill="#F4EFEA" font-size="16" font-weight="600">script</text>
-  <text x="620" y="113" text-anchor="middle" fill="#B3A89E" font-size="11">woven, linted, QA'd</text>
+    <!-- outline, gate 1 -->
+    <rect x="412" y="100" width="188" height="70" rx="6" fill="#2B211A" stroke="#E0522F" stroke-width="2"/>
+    <text x="506" y="130" text-anchor="middle" fill="#F5EBDC" font-size="16" font-weight="600">outline</text>
+    <text x="506" y="150" text-anchor="middle" fill="#E0522F" font-size="11" font-weight="700">GATE 1 · YOU APPROVE</text>
+    <text x="506" y="163" text-anchor="middle" fill="#B39B7F" font-size="11">hook + packaging promise</text>
 
-  <line x1="695" y1="98" x2="733" y2="98" stroke="#B3A89E" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <line x1="600" y1="135" x2="628" y2="135" stroke="#B39B7F" stroke-width="1.5" marker-end="url(#arrow)"/>
 
-  <!-- you record -->
-  <rect x="740" y="70" width="150" height="56" rx="12" fill="#122543" stroke="#B3A89E" stroke-dasharray="5 4"/>
-  <text x="815" y="94" text-anchor="middle" fill="#F4EFEA" font-size="16" font-weight="600">you record</text>
-  <text x="815" y="113" text-anchor="middle" fill="#B3A89E" font-size="11">your camera, your way</text>
+    <!-- script -->
+    <rect x="632" y="100" width="188" height="70" rx="6" fill="#2B211A" stroke="#4A3728"/>
+    <text x="726" y="130" text-anchor="middle" fill="#F5EBDC" font-size="16" font-weight="600">script</text>
+    <text x="726" y="150" text-anchor="middle" fill="#B39B7F" font-size="11">woven from your words,</text>
+    <text x="726" y="163" text-anchor="middle" fill="#B39B7F" font-size="11">linted, craft QA'd</text>
 
-  <line x1="890" y1="98" x2="928" y2="98" stroke="#B3A89E" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <line x1="820" y1="135" x2="848" y2="135" stroke="#B39B7F" stroke-width="1.5" marker-end="url(#arrow)"/>
 
-  <!-- cut · gate 2 -->
-  <rect x="935" y="70" width="150" height="56" rx="12" fill="#1B3358" stroke="#B66D46" stroke-width="1.5"/>
-  <text x="1010" y="94" text-anchor="middle" fill="#F4EFEA" font-size="16" font-weight="600">cut</text>
-  <text x="1010" y="113" text-anchor="middle" fill="#C8824F" font-size="11" font-weight="700">GATE 2 · YOU APPROVE</text>
+    <!-- you record (your part, dashed) -->
+    <rect x="852" y="100" width="188" height="70" rx="6" fill="#191210" stroke="#B39B7F" stroke-dasharray="5 4"/>
+    <text x="946" y="130" text-anchor="middle" fill="#F5EBDC" font-size="16" font-weight="600">you record</text>
+    <text x="946" y="150" text-anchor="middle" fill="#B39B7F" font-size="11">your camera, your way</text>
 
-  <!-- wrap connector: row 1 → row 2 -->
-  <path d="M 1010 126 C 1010 175, 900 160, 620 168 C 340 176, 172 170, 165 205" fill="none" stroke="#B3A89E" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <!-- strip runs off toward the wrap -->
+    <line x1="1040" y1="135" x2="1068" y2="135" stroke="#B39B7F" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <rect x="1072" y="100" width="146" height="70" rx="6" fill="#2B211A" stroke="#4A3728"/>
+    <text x="1145" y="126" text-anchor="middle" fill="#F5EBDC" font-size="13" font-weight="600">footage in hand</text>
+    <text x="1145" y="144" text-anchor="middle" fill="#B39B7F" font-size="10.5">reel 1 feeds reel 2,</text>
+    <text x="1145" y="158" text-anchor="middle" fill="#B39B7F" font-size="10.5">the edit begins</text>
+  </g>
 
-  <!-- ══════════ row 2 ══════════ -->
+  <!-- footage-first side entry -->
+  <g>
+    <rect x="40" y="242" width="212" height="66" rx="10" fill="#191210" stroke="#E89A3C" stroke-dasharray="5 4"/>
+    <text x="146" y="268" text-anchor="middle" fill="#F2C36B" font-size="13" font-weight="700">already have footage?</text>
+    <text x="146" y="285" text-anchor="middle" fill="#B39B7F" font-size="10.5">livestream VOD, a talk, raw takes:</text>
+    <text x="146" y="298" text-anchor="middle" fill="#B39B7F" font-size="10.5">skip the writing, start at the cut</text>
+  </g>
+  <path d="M 252 275 C 280 275, 285 315, 292 348" fill="none" stroke="#E89A3C" stroke-width="1.5" marker-end="url(#arrowAmber)"/>
+  <!-- wrap connector reel 1 to reel 2 -->
+  <path d="M 1145 174 C 1145 230, 1000 250, 640 256 C 460 259, 350 268, 300 342" fill="none" stroke="#B39B7F" stroke-width="1.5" marker-end="url(#arrow)"/>
 
-  <!-- beats · gate 3 -->
-  <rect x="85" y="212" width="170" height="56" rx="12" fill="#1B3358" stroke="#B66D46" stroke-width="1.5"/>
-  <text x="170" y="236" text-anchor="middle" fill="#F4EFEA" font-size="16" font-weight="600">graphics beats</text>
-  <text x="170" y="255" text-anchor="middle" fill="#C8824F" font-size="11" font-weight="700">GATE 3 · YOU APPROVE</text>
+  <!-- ═══════ film strip, reel 2: the edit lane ═══════ -->
+  <g>
+    <rect x="170" y="330" width="1070" height="118" rx="8" fill="#241B15" stroke="#3B2C20"/>
+    <rect x="170" y="334" width="1070" height="10" fill="url(#sprockets)"/>
+    <rect x="170" y="434" width="1070" height="10" fill="url(#sprockets)"/>
 
-  <line x1="255" y1="240" x2="293" y2="240" stroke="#B3A89E" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <!-- cut, gate 2 -->
+    <rect x="192" y="354" width="200" height="70" rx="6" fill="#2B211A" stroke="#E0522F" stroke-width="2"/>
+    <text x="292" y="380" text-anchor="middle" fill="#F5EBDC" font-size="16" font-weight="600">cut</text>
+    <text x="292" y="398" text-anchor="middle" fill="#E0522F" font-size="11" font-weight="700">GATE 2 · YOU APPROVE</text>
+    <text x="292" y="414" text-anchor="middle" fill="#F2C36B" font-size="10.5">preview render, every iteration</text>
 
-  <!-- graphics + assets -->
-  <rect x="300" y="212" width="185" height="56" rx="12" fill="#1B3358" stroke="#2A4068"/>
-  <text x="392" y="236" text-anchor="middle" fill="#F4EFEA" font-size="16" font-weight="600">graphics + assets</text>
-  <text x="392" y="255" text-anchor="middle" fill="#B3A89E" font-size="11">alpha overlays, b-roll</text>
+    <line x1="392" y1="389" x2="416" y2="389" stroke="#B39B7F" stroke-width="1.5" marker-end="url(#arrow)"/>
 
-  <line x1="485" y1="240" x2="523" y2="240" stroke="#B3A89E" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <!-- beats, gate 3 -->
+    <rect x="420" y="354" width="184" height="70" rx="6" fill="#2B211A" stroke="#E0522F" stroke-width="2"/>
+    <text x="512" y="380" text-anchor="middle" fill="#F5EBDC" font-size="16" font-weight="600">graphics beats</text>
+    <text x="512" y="398" text-anchor="middle" fill="#E0522F" font-size="11" font-weight="700">GATE 3 · YOU APPROVE</text>
+    <text x="512" y="414" text-anchor="middle" fill="#B39B7F" font-size="10.5">CTAs placed, density per your bible</text>
 
-  <!-- package -->
-  <rect x="530" y="212" width="150" height="56" rx="12" fill="#1B3358" stroke="#2A4068"/>
-  <text x="605" y="236" text-anchor="middle" fill="#F4EFEA" font-size="16" font-weight="600">package</text>
-  <text x="605" y="255" text-anchor="middle" fill="#B3A89E" font-size="11">titles, thumbs, chapters</text>
+    <line x1="604" y1="389" x2="628" y2="389" stroke="#B39B7F" stroke-width="1.5" marker-end="url(#arrow)"/>
 
-  <line x1="680" y1="240" x2="718" y2="240" stroke="#B3A89E" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <!-- graphics + assets -->
+    <rect x="632" y="354" width="170" height="70" rx="6" fill="#2B211A" stroke="#4A3728"/>
+    <text x="717" y="380" text-anchor="middle" fill="#F5EBDC" font-size="15" font-weight="600">graphics + assets</text>
+    <text x="717" y="398" text-anchor="middle" fill="#B39B7F" font-size="10.5">alpha overlays, b-roll,</text>
+    <text x="717" y="411" text-anchor="middle" fill="#B39B7F" font-size="10.5">composited preview</text>
 
-  <!-- you finish · gate 4 -->
-  <rect x="725" y="212" width="215" height="56" rx="12" fill="#122543" stroke="#B66D46" stroke-width="1.5" stroke-dasharray="5 4"/>
-  <text x="832" y="236" text-anchor="middle" fill="#F4EFEA" font-size="16" font-weight="600">you finish in your editor</text>
-  <text x="832" y="255" text-anchor="middle" fill="#C8824F" font-size="11" font-weight="700">GATE 4 · YOUR FINAL SAY</text>
+    <line x1="802" y1="389" x2="826" y2="389" stroke="#B39B7F" stroke-width="1.5" marker-end="url(#arrow)"/>
 
-  <line x1="940" y1="240" x2="978" y2="240" stroke="#B3A89E" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <!-- package -->
+    <rect x="830" y="354" width="150" height="70" rx="6" fill="#2B211A" stroke="#4A3728"/>
+    <text x="905" y="380" text-anchor="middle" fill="#F5EBDC" font-size="15" font-weight="600">package</text>
+    <text x="905" y="398" text-anchor="middle" fill="#B39B7F" font-size="10.5">titles + thumbs as pairs,</text>
+    <text x="905" y="411" text-anchor="middle" fill="#B39B7F" font-size="10.5">description, chapters</text>
 
-  <!-- retro -->
-  <rect x="985" y="212" width="110" height="56" rx="12" fill="#1B3358" stroke="#2A4068"/>
-  <text x="1040" y="236" text-anchor="middle" fill="#F4EFEA" font-size="16" font-weight="600">retro</text>
-  <text x="1040" y="255" text-anchor="middle" fill="#B3A89E" font-size="11">your notes</text>
+    <line x1="980" y1="389" x2="1004" y2="389" stroke="#B39B7F" stroke-width="1.5" marker-end="url(#arrow)"/>
 
-  <!-- ══════════ compounding loop ══════════ -->
+    <!-- final, gate 4 -->
+    <rect x="1008" y="354" width="210" height="70" rx="6" fill="#2B211A" stroke="#E0522F" stroke-width="2"/>
+    <text x="1113" y="378" text-anchor="middle" fill="#F5EBDC" font-size="15" font-weight="600">final</text>
+    <text x="1113" y="395" text-anchor="middle" fill="#E0522F" font-size="11" font-weight="700">GATE 4 · YOUR FINAL SAY</text>
+    <text x="1113" y="409" text-anchor="middle" fill="#F2C36B" font-size="10.5">final render offered, or finish</text>
+    <text x="1113" y="421" text-anchor="middle" fill="#F2C36B" font-size="10.5">in your editor: always your call</text>
+  </g>
 
-  <path d="M 1040 268 C 1040 330, 900 345, 590 345 C 330 345, 210 330, 210 132" fill="none" stroke="#C8824F" stroke-width="1.5" stroke-dasharray="6 5" marker-end="url(#arrowCopper)"/>
-  <rect x="415" y="368" width="350" height="34" rx="17" fill="#122543" stroke="#9E5733"/>
-  <text x="590" y="390" text-anchor="middle" fill="#C8824F" font-size="13" font-weight="600">retro edits the pipeline's own files</text>
-  <text x="590" y="430" text-anchor="middle" fill="#B3A89E" font-size="13">voice bible · blacklist · format learnings · tool notes: the next video starts smarter</text>
+  <!-- ═══════ retro: the compounding loop ═══════ -->
+  <path d="M 1113 428 C 1113 495, 950 510, 640 510 C 340 510, 16 495, 16 320 C 16 200, 22 152, 44 138" fill="none" stroke="#E89A3C" stroke-width="1.5" stroke-dasharray="6 5" marker-end="url(#arrowAmber)"/>
+  <rect x="460" y="490" width="360" height="36" rx="18" fill="#191210" stroke="#E89A3C"/>
+  <text x="640" y="513" text-anchor="middle" fill="#E89A3C" font-size="13" font-weight="700">retro: your notes edit the pipeline's own files</text>
+  <text x="640" y="550" text-anchor="middle" fill="#B39B7F" font-size="12.5">voice bible · production bible · blacklist · format learnings · tool notes: the next video starts smarter</text>
 
   <!-- legend -->
-  <rect x="30" y="24" width="12" height="12" rx="3" fill="#1B3358" stroke="#B66D46" stroke-width="1.5"/>
-  <text x="50" y="35" fill="#B3A89E" font-size="12">approval gate: hard stop, waits for you</text>
-  <rect x="330" y="24" width="12" height="12" rx="3" fill="#122543" stroke="#B3A89E" stroke-dasharray="4 3"/>
-  <text x="350" y="35" fill="#B3A89E" font-size="12">your part</text>
+  <g>
+    <rect x="742" y="30" width="12" height="12" rx="3" fill="#191210" stroke="#B39B7F" stroke-dasharray="4 3"/>
+    <text x="762" y="41" fill="#B39B7F" font-size="12">your part</text>
+    <rect x="850" y="30" width="12" height="12" rx="3" fill="#2B211A" stroke="#E0522F" stroke-width="1.5"/>
+    <text x="870" y="41" fill="#F5EBDC" font-size="12">approval gate: hard stop, waits for you</text>
+    <text x="742" y="62" fill="#B39B7F" font-size="12">every stage also writes editor-ready assets: edl.json, timeline, overlays, cut plan</text>
+  </g>
 </svg>

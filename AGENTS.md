@@ -11,9 +11,12 @@ Taste lives in files. Mechanics live in scripts. Skills are thin routers between
 | Path | Purpose |
 |---|---|
 | `.claude-plugin/marketplace.json` | Module manifest (install via `npx bmad-method install --custom-source <repo>`) |
+| `skills/module.yaml` + `skills/module-help.csv` | Module identity and the help-catalog rows (canonical BMad schema). The installer merges every module's help csv into `{project-root}/_bmad/_config/bmad-help.csv`; mc-agent and the bmad-help core skill read that merged catalog. A new or changed skill must update its module-help.csv row |
+| `skills/mc-agent/` | Manny the Manticore, the persona agent and studio front door: a skill whose `[agent]` block in `customize.toml` carries the persona and capabilities menu (the BMad agent pattern); routes to the other skills, never does stage mechanics itself |
 | `skills/mc-pipeline/` | The router; owns `PIPELINE.md`, the master stage/gate/project.json contract |
 | `skills/mc-setup/` | Configuration skill: writes the studio config (`[modules.manticore]` in `{project-root}/_bmad/custom/config.toml`); its `customize.toml` carries the full `[defaults]`; `assets/` holds the templates it copies into the studio (tokens, blacklist starter, voice-bible spec, format profiles) |
 | `skills/mc-ograf/` | OGraf graphics authoring (scaffold, verify, spec references); gated on `[editor] ograf-editable` for the editor lane, always available for the OBS/SPX-GC live lane |
+| `skills/mc-audio/` | Audio service skill, not a stage: farms sound for other skills (Kokoro TTS/dialogue, MusicGen beds, AudioLDM2 SFX) from the `[audio]` lanes, local-first with paid rungs opt-in; heavy venv and model caches live in the creator's `{engines-path}/audio-lab` workspace |
 | `skills/mc-*/` | The 12 stage skills; each resolves the studio config + its own `customize.toml` on activation and stops at gates |
 | `docs/user-guide.md` | "Configure your own Manticore studio", the end-user walkthrough |
 
@@ -30,7 +33,8 @@ Taste lives in files. Mechanics live in scripts. Skills are thin routers between
 
 ## Design invariants (settled decisions; change only with the maintainer's sign-off)
 
-- The cut stage's default deliverable is an editable timeline in the creator's editor (format per `[editor] timeline-format`), never a silently baked mp4. Rendering a final is always available when the creator asks for it; it is an offer, not the default. Users whose editor takes no timeline format still get edl.json + cutplan + preview.
+- Manticore always renders (render-first; maintainer sign-off recorded 2026-07-07, replacing the earlier editable-timeline-never-baked invariant). Every cut iteration produces a fast low-res preview; once the graphics stage has rendered overlays, the preview re-renders with them composited; at gate 4 a final-quality render is offered. The editor timeline export (per `[editor] timeline-format`) and all assets (edl.json, cutplan, overlays) are ALWAYS still produced alongside, so the creator can move into their editor at any step. The creator confirms this default during mc-setup.
+- Local-first defaults, paid vendors opt-in only: no paid or metered vendor (ElevenLabs or any future TTS/SFX/music provider) ships in any default, key names included. Paid lanes exist only as explicit opt-in choices made during setup, and their key sourcing is mentioned only inside the opt-in branch of the interview.
 - parakeet-mlx (model parakeet-tdt-0.6b-v3) is the reference cutting transcript: free, local, word timestamps, and empirically preserves verbatim fillers (validated on real footage 2026-07-05). Generic Whisper is not a substitute because it normalizes fillers away. Alternative providers (elevenlabs-scribe, deepgram-nova3) go behind the `[transcription]` switch with the same output shape.
 - Generated footage never depicts UI or text that must be accurate; real UI comes from screen recordings.
 - OGraf output only where the target supports it: `[editor] ograf-editable` for the editor lane, always for the OBS/SPX-GC live lane. Default deliverable is baked alpha, which works everywhere.
