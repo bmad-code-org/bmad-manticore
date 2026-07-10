@@ -1,0 +1,302 @@
+{
+ "script": "Today we will review the plan and the budget and the schedule and then we can go to the demo at the end.\n",
+ "events": [
+  {
+   "tokens": [
+    " T",
+    "od",
+    "ay"
+   ],
+   "segment": 0,
+   "final": false
+  },
+  {
+   "tokens": [
+    " T",
+    "od",
+    "ay",
+    " we",
+    " w",
+    "ill",
+    " re",
+    "v",
+    "iew"
+   ],
+   "segment": 0,
+   "final": false
+  },
+  {
+   "tokens": [
+    " T",
+    "od",
+    "ay",
+    " we",
+    " w",
+    "ill",
+    " re",
+    "v",
+    "iew",
+    " the"
+   ],
+   "segment": 0,
+   "final": false
+  },
+  {
+   "tokens": [
+    " T",
+    "od",
+    "ay",
+    " we",
+    " w",
+    "ill",
+    " re",
+    "v",
+    "iew",
+    " the",
+    " pl",
+    "an"
+   ],
+   "segment": 0,
+   "final": false
+  },
+  {
+   "tokens": [
+    " T",
+    "od",
+    "ay",
+    " we",
+    " w",
+    "ill",
+    " re",
+    "v",
+    "iew",
+    " the",
+    " pl",
+    "an",
+    " and",
+    " al",
+    "so",
+    " the"
+   ],
+   "segment": 0,
+   "final": false
+  },
+  {
+   "tokens": [
+    " T",
+    "od",
+    "ay",
+    " we",
+    " w",
+    "ill",
+    " re",
+    "v",
+    "iew",
+    " the",
+    " pl",
+    "an",
+    " and",
+    " al",
+    "so",
+    " the",
+    " o",
+    "ther",
+    " th",
+    "ing",
+    " we"
+   ],
+   "segment": 0,
+   "final": false
+  },
+  {
+   "tokens": [
+    " T",
+    "od",
+    "ay",
+    " we",
+    " w",
+    "ill",
+    " re",
+    "v",
+    "iew",
+    " the",
+    " pl",
+    "an",
+    " and",
+    " al",
+    "so",
+    " the",
+    " o",
+    "ther",
+    " th",
+    "ing",
+    " we",
+    " did"
+   ],
+   "segment": 0,
+   "final": false
+  },
+  {
+   "tokens": [
+    " T",
+    "od",
+    "ay",
+    " we",
+    " w",
+    "ill",
+    " re",
+    "v",
+    "iew",
+    " the",
+    " pl",
+    "an",
+    " and",
+    " al",
+    "so",
+    " the",
+    " o",
+    "ther",
+    " th",
+    "ing",
+    " we",
+    " did"
+   ],
+   "segment": 0,
+   "final": true
+  },
+  {
+   "tokens": [
+    " B",
+    "ud",
+    "get"
+   ],
+   "segment": 1,
+   "final": false
+  },
+  {
+   "tokens": [
+    " B",
+    "ud",
+    "get",
+    " end",
+    " the"
+   ],
+   "segment": 1,
+   "final": false
+  },
+  {
+   "tokens": [
+    " B",
+    "ud",
+    "get",
+    " end",
+    " the",
+    " sch",
+    "ed",
+    "u",
+    "le"
+   ],
+   "segment": 1,
+   "final": false
+  },
+  {
+   "tokens": [
+    " B",
+    "ud",
+    "get",
+    " end",
+    " the",
+    " sch",
+    "ed",
+    "u",
+    "le",
+    " and",
+    " the",
+    "n",
+    " we"
+   ],
+   "segment": 1,
+   "final": false
+  },
+  {
+   "tokens": [
+    " B",
+    "ud",
+    "get",
+    " end",
+    " the",
+    " sch",
+    "ed",
+    "u",
+    "le",
+    " and",
+    " the",
+    "n",
+    " we",
+    " can",
+    " go",
+    " to",
+    " the"
+   ],
+   "segment": 1,
+   "final": false
+  },
+  {
+   "tokens": [
+    " B",
+    "ud",
+    "get",
+    " end",
+    " the",
+    " sch",
+    "ed",
+    "u",
+    "le",
+    " and",
+    " the",
+    "n",
+    " we",
+    " can",
+    " go",
+    " to",
+    " the",
+    " de",
+    "m",
+    "o",
+    " at"
+   ],
+   "segment": 1,
+   "final": false
+  },
+  {
+   "tokens": [
+    " B",
+    "ud",
+    "get",
+    " end",
+    " the",
+    " sch",
+    "ed",
+    "u",
+    "le",
+    " and",
+    " the",
+    "n",
+    " we",
+    " can",
+    " go",
+    " to",
+    " the",
+    " de",
+    "m",
+    "o",
+    " at",
+    " the",
+    " end"
+   ],
+   "segment": 1,
+   "final": true
+  }
+ ],
+ "notes": "Stopword-dense off-script ad-lib ('and also the other thing we did') spoken after 'the plan' in a script full of forward stopword duplicates; the aligner must hold through it and recover on 'and the budget and the schedule'. [capture: nemotron-streaming int8 560ms, 120ms chunks, 0 tail revisions observed]"
+}

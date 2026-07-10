@@ -1,0 +1,343 @@
+{
+ "script": "I ran the numbers last month and the break-even point was under 90 days. We shipped the first build in 2026 and the response was huge.\n",
+ "events": [
+  {
+   "tokens": [
+    " I",
+    " r",
+    "an"
+   ],
+   "segment": 0,
+   "final": false
+  },
+  {
+   "tokens": [
+    " I",
+    " r",
+    "an",
+    " the",
+    " num",
+    "bers"
+   ],
+   "segment": 0,
+   "final": false
+  },
+  {
+   "tokens": [
+    " I",
+    " r",
+    "an",
+    " the",
+    " num",
+    "bers",
+    " l",
+    "ast",
+    " mon",
+    "th"
+   ],
+   "segment": 0,
+   "final": false
+  },
+  {
+   "tokens": [
+    " I",
+    " r",
+    "an",
+    " the",
+    " num",
+    "bers",
+    " l",
+    "ast",
+    " mon",
+    "th",
+    "e"
+   ],
+   "segment": 0,
+   "final": false
+  },
+  {
+   "tokens": [
+    " I",
+    " r",
+    "an",
+    " the",
+    " num",
+    "bers",
+    " l",
+    "ast",
+    " mon",
+    "th",
+    "e",
+    " bre",
+    "ake",
+    "ven",
+    " po",
+    "int"
+   ],
+   "segment": 0,
+   "final": false
+  },
+  {
+   "tokens": [
+    " I",
+    " r",
+    "an",
+    " the",
+    " num",
+    "bers",
+    " l",
+    "ast",
+    " mon",
+    "th",
+    "e",
+    " bre",
+    "ake",
+    "ven",
+    " po",
+    "int",
+    " was",
+    " u",
+    "nder"
+   ],
+   "segment": 0,
+   "final": false
+  },
+  {
+   "tokens": [
+    " I",
+    " r",
+    "an",
+    " the",
+    " num",
+    "bers",
+    " l",
+    "ast",
+    " mon",
+    "th",
+    "e",
+    " bre",
+    "ake",
+    "ven",
+    " po",
+    "int",
+    " was",
+    " u",
+    "nder",
+    " n",
+    "in",
+    "ety",
+    " day",
+    "s"
+   ],
+   "segment": 0,
+   "final": false
+  },
+  {
+   "tokens": [
+    " I",
+    " r",
+    "an",
+    " the",
+    " num",
+    "bers",
+    " l",
+    "ast",
+    " mon",
+    "th",
+    "e",
+    " bre",
+    "ake",
+    "ven",
+    " po",
+    "int",
+    " was",
+    " u",
+    "nder",
+    " n",
+    "in",
+    "ety",
+    " day",
+    "s"
+   ],
+   "segment": 0,
+   "final": true
+  },
+  {
+   "tokens": [
+    " We"
+   ],
+   "segment": 1,
+   "final": false
+  },
+  {
+   "tokens": [
+    " We",
+    " sh",
+    "i",
+    "pp",
+    "ed",
+    " the",
+    " f",
+    "irst"
+   ],
+   "segment": 1,
+   "final": false
+  },
+  {
+   "tokens": [
+    " We",
+    " sh",
+    "i",
+    "pp",
+    "ed",
+    " the",
+    " f",
+    "irst",
+    " bu",
+    "ild",
+    " in"
+   ],
+   "segment": 1,
+   "final": false
+  },
+  {
+   "tokens": [
+    " We",
+    " sh",
+    "i",
+    "pp",
+    "ed",
+    " the",
+    " f",
+    "irst",
+    " bu",
+    "ild",
+    " in",
+    " tw",
+    "ent",
+    "y",
+    " tw",
+    "ent",
+    "y"
+   ],
+   "segment": 1,
+   "final": false
+  },
+  {
+   "tokens": [
+    " We",
+    " sh",
+    "i",
+    "pp",
+    "ed",
+    " the",
+    " f",
+    "irst",
+    " bu",
+    "ild",
+    " in",
+    " tw",
+    "ent",
+    "y",
+    " tw",
+    "ent",
+    "y",
+    " six"
+   ],
+   "segment": 1,
+   "final": false
+  },
+  {
+   "tokens": [
+    " We",
+    " sh",
+    "i",
+    "pp",
+    "ed",
+    " the",
+    " f",
+    "irst",
+    " bu",
+    "ild",
+    " in",
+    " tw",
+    "ent",
+    "y",
+    " tw",
+    "ent",
+    "y",
+    " six",
+    " and",
+    " the"
+   ],
+   "segment": 1,
+   "final": false
+  },
+  {
+   "tokens": [
+    " We",
+    " sh",
+    "i",
+    "pp",
+    "ed",
+    " the",
+    " f",
+    "irst",
+    " bu",
+    "ild",
+    " in",
+    " tw",
+    "ent",
+    "y",
+    " tw",
+    "ent",
+    "y",
+    " six",
+    " and",
+    " the",
+    " res",
+    "p",
+    "on",
+    "se",
+    " was"
+   ],
+   "segment": 1,
+   "final": false
+  },
+  {
+   "tokens": [
+    " We",
+    " sh",
+    "i",
+    "pp",
+    "ed",
+    " the",
+    " f",
+    "irst",
+    " bu",
+    "ild",
+    " in",
+    " tw",
+    "ent",
+    "y",
+    " tw",
+    "ent",
+    "y",
+    " six",
+    " and",
+    " the",
+    " res",
+    "p",
+    "on",
+    "se",
+    " was",
+    " h",
+    "u",
+    "ge"
+   ],
+   "segment": 1,
+   "final": true
+  }
+ ],
+ "notes": "Digits in script spoken as words: script has 90 and 2026, the reader says ninety and twenty twenty six. Captured live from the nemotron-streaming int8 560ms model (sherpa-onnx 1.13.4, greedy_search, 120 ms chunks) over macOS say + ffmpeg synthesized speech; timestamps stripped; 1 word-level tail revisions present (a later partial's merged words are not an extension of the previous partial's)."
+}

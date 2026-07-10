@@ -21,7 +21,7 @@ from pathlib import Path
 TESTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(TESTS_DIR.parent / "server"))
 
-from script_ingest import ingest  # noqa: E402
+from script_ingest import ingest, speakable_words, take_word_ranges  # noqa: E402
 
 FIXTURE = TESTS_DIR / "fixtures" / "sample-script.md"
 
@@ -310,6 +310,113 @@ class TestRobustness(unittest.TestCase):
         self.assertNotIn("]", text)
         self.assertIn("Before after.", text)
         self.assertIn("Also here.", text)
+
+
+class TestSpeakableWords(unittest.TestCase):
+    """speakable_words() must mirror the UI's data-i word indexing.
+
+    static/js/model.js renders each run's text by splitting on whitespace
+    (String.split(/(\\s+)/), keeping only non-whitespace chunks) and wraps
+    each chunk in a data-i span, incrementing one global counter across
+    para and take blocks in document order; note blocks are skipped. That
+    is exactly run["text"].split() flattened in the same order, so the
+    list length must equal doc["word-count"].
+    """
+
+    def test_length_equals_word_count_on_fixture(self):
+        doc = ingest(FIXTURE.read_text(encoding="utf-8"))
+        words = speakable_words(doc)
+        self.assertEqual(len(words), doc["word-count"])
+
+    def test_order_spans_sections_blocks_and_runs(self):
+        doc = ingest(
+            "## A\n\nOne two. [INVENTED] Three four.\n\n"
+            "[TAKE int1 1.0s-2.0s]\nFive six.\n\n"
+            "[a note that is never indexed]\n\n## B\n\nSeven.\n"
+        )
+        words = speakable_words(doc)
+        self.assertEqual(words, ["One", "two.", "Three", "four.",
+                                 "Five", "six.", "Seven."])
+        self.assertEqual(len(words), doc["word-count"])
+
+    def test_notes_excluded(self):
+        doc = ingest("Speak this [not this] aloud.\n")
+        self.assertEqual(speakable_words(doc), ["Speak", "this", "aloud."])
+
+
+class TestTakeWordRanges(unittest.TestCase):
+    """take_word_ranges() must use speakable_words() indexing exactly.
+
+    The Phase B aligner treats take words as free to skip; the ranges are
+    [start, end) pairs into the same global word index the UI renders as
+    data-i spans, so for every range, speakable_words(doc)[start:end] must
+    be precisely that take block's words.
+    """
+
+    def take_block_words(self, doc):
+        out = []
+        for section in doc["sections"]:
+            for block in section["blocks"]:
+                if block["type"] == "take":
+                    words = []
+                    for run in block["runs"]:
+                        words.extend(run["text"].split())
+                    out.append(words)
+        return out
+
+    def assert_parity(self, doc):
+        words = speakable_words(doc)
+        ranges = take_word_ranges(doc)
+        expected = self.take_block_words(doc)
+        self.assertEqual(len(ranges), len(expected))
+        for (start, end), block_words in zip(ranges, expected):
+            self.assertEqual(words[start:end], block_words)
+
+    def test_no_takes_yields_empty(self):
+        self.assertEqual(take_word_ranges(ingest("Just plain talk.\n")), [])
+
+    def test_single_take_between_paras(self):
+        doc = ingest(
+            "Intro of four words.\n\n"
+            "[TAKE int1 1.0s-2.0s]\nRecorded middle bit here.\n\n"
+            "Outro words.\n"
+        )
+        self.assertEqual(take_word_ranges(doc), [[4, 8]])
+        self.assert_parity(doc)
+
+    def test_take_at_document_start_and_end(self):
+        doc = ingest(
+            "[TAKE a 0s-1s]\nFirst take.\n\nMiddle para.\n\n"
+            "[TAKE b 2s-3s]\nLast take here.\n"
+        )
+        self.assertEqual(take_word_ranges(doc), [[0, 2], [4, 7]])
+        self.assert_parity(doc)
+
+    def test_ranges_span_sections_and_skip_notes(self):
+        doc = ingest(
+            "## A\n\nOne two. [INVENTED] Three four.\n\n"
+            "[TAKE int1 1.0s-2.0s]\nFive six.\n\n"
+            "[a note that is never indexed]\n\n## B\n\nSeven.\n"
+        )
+        self.assertEqual(take_word_ranges(doc), [[4, 6]])
+        self.assert_parity(doc)
+
+    def test_parity_on_fixture(self):
+        doc = ingest(FIXTURE.read_text(encoding="utf-8"))
+        ranges = take_word_ranges(doc)
+        self.assertEqual(len(ranges), 2)
+        self.assert_parity(doc)
+        words = speakable_words(doc)
+        for start, end in ranges:
+            self.assertGreaterEqual(start, 0)
+            self.assertGreater(end, start)
+            self.assertLessEqual(end, len(words))
+
+    def test_plain_fmt(self):
+        doc = ingest("Spoken bit here.\n\n[TAKE t1 0.5s-2.5s]\nDone now.\n",
+                     fmt="plain")
+        self.assertEqual(take_word_ranges(doc), [[3, 5]])
+        self.assert_parity(doc)
 
 
 if __name__ == "__main__":

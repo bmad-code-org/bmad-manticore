@@ -1,0 +1,304 @@
+{
+ "script": "So that is the case: your money, your latency, and your data all point the same direction. Try one local tool this week and tell me how it goes in the comments. Catch you in the next one.\n",
+ "events": [
+  {
+   "tokens": [
+    " Th",
+    "at",
+    " is",
+    " the",
+    " c",
+    "ase"
+   ],
+   "segment": 0,
+   "final": false
+  },
+  {
+   "tokens": [
+    " Th",
+    "at",
+    " is",
+    " the",
+    " c",
+    "ase",
+    ",",
+    " you",
+    "r",
+    " m",
+    "oney"
+   ],
+   "segment": 0,
+   "final": false
+  },
+  {
+   "tokens": [
+    " Th",
+    "at",
+    " is",
+    " the",
+    " c",
+    "ase",
+    ",",
+    " you",
+    "r",
+    " m",
+    "oney",
+    ",",
+    " you",
+    "r",
+    " l",
+    "at",
+    "ency",
+    ",",
+    " and"
+   ],
+   "segment": 0,
+   "final": false
+  },
+  {
+   "tokens": [
+    " Th",
+    "at",
+    " is",
+    " the",
+    " c",
+    "ase",
+    ",",
+    " you",
+    "r",
+    " m",
+    "oney",
+    ",",
+    " you",
+    "r",
+    " l",
+    "at",
+    "ency",
+    ",",
+    " and",
+    " you",
+    "r",
+    " d",
+    "ata"
+   ],
+   "segment": 0,
+   "final": false
+  },
+  {
+   "tokens": [
+    " Th",
+    "at",
+    " is",
+    " the",
+    " c",
+    "ase",
+    ",",
+    " you",
+    "r",
+    " m",
+    "oney",
+    ",",
+    " you",
+    "r",
+    " l",
+    "at",
+    "ency",
+    ",",
+    " and",
+    " you",
+    "r",
+    " d",
+    "ata",
+    " all",
+    " po",
+    "int",
+    " the",
+    " s",
+    "ame"
+   ],
+   "segment": 0,
+   "final": false
+  },
+  {
+   "tokens": [
+    " Th",
+    "at",
+    " is",
+    " the",
+    " c",
+    "ase",
+    ",",
+    " you",
+    "r",
+    " m",
+    "oney",
+    ",",
+    " you",
+    "r",
+    " l",
+    "at",
+    "ency",
+    ",",
+    " and",
+    " you",
+    "r",
+    " d",
+    "ata",
+    " all",
+    " po",
+    "int",
+    " the",
+    " s",
+    "ame"
+   ],
+   "segment": 0,
+   "final": true
+  },
+  {
+   "tokens": [
+    " One",
+    " loc"
+   ],
+   "segment": 1,
+   "final": false
+  },
+  {
+   "tokens": [
+    " One",
+    " loc",
+    "al",
+    " to",
+    "ol",
+    " th",
+    "is"
+   ],
+   "segment": 1,
+   "final": false
+  },
+  {
+   "tokens": [
+    " One",
+    " loc",
+    "al",
+    " to",
+    "ol",
+    " th",
+    "is",
+    " and",
+    " te",
+    "ll",
+    " me",
+    " how",
+    " it",
+    " go",
+    "es"
+   ],
+   "segment": 1,
+   "final": false
+  },
+  {
+   "tokens": [
+    " One",
+    " loc",
+    "al",
+    " to",
+    "ol",
+    " th",
+    "is",
+    " and",
+    " te",
+    "ll",
+    " me",
+    " how",
+    " it",
+    " go",
+    "es",
+    " in",
+    " the"
+   ],
+   "segment": 1,
+   "final": false
+  },
+  {
+   "tokens": [
+    " One",
+    " loc",
+    "al",
+    " to",
+    "ol",
+    " th",
+    "is",
+    " and",
+    " te",
+    "ll",
+    " me",
+    " how",
+    " it",
+    " go",
+    "es",
+    " in",
+    " the",
+    " com",
+    "ment",
+    "s"
+   ],
+   "segment": 1,
+   "final": false
+  },
+  {
+   "tokens": [
+    " One",
+    " loc",
+    "al",
+    " to",
+    "ol",
+    " th",
+    "is",
+    " and",
+    " te",
+    "ll",
+    " me",
+    " how",
+    " it",
+    " go",
+    "es",
+    " in",
+    " the",
+    " com",
+    "ment",
+    "s"
+   ],
+   "segment": 1,
+   "final": true
+  },
+  {
+   "tokens": [
+    " C",
+    "atch",
+    " you",
+    " in",
+    " the",
+    " ne",
+    "xt",
+    " one"
+   ],
+   "segment": 2,
+   "final": false
+  },
+  {
+   "tokens": [
+    " C",
+    "atch",
+    " you",
+    " in",
+    " the",
+    " ne",
+    "xt",
+    " one"
+   ],
+   "segment": 2,
+   "final": true
+  }
+ ],
+ "notes": "Fast read (say -r 210) to stress tail revisions and merges. Captured live from the nemotron-streaming int8 560ms model (sherpa-onnx 1.13.4, greedy_search, 120 ms chunks) over macOS say + ffmpeg synthesized speech; timestamps stripped; 3 word-level tail revisions present (a later partial's merged words are not an extension of the previous partial's)."
+}

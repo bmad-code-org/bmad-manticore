@@ -272,6 +272,47 @@ def ingest(text, fmt="markdown"):
     }
 
 
+def speakable_words(doc):
+    """Return the doc's speakable words in global word-index order.
+
+    Flattens sections, then para/take blocks, then runs, splitting each
+    run's text on whitespace. Note blocks are excluded. This ordering MUST
+    match the UI's data-i word indexing (static/js/model.js wraps exactly
+    the non-whitespace chunks of each run in <span class="w" data-i=...> in
+    the same document order), so len(speakable_words(doc)) equals
+    doc["word-count"] and the Phase B aligner's anchor indexes agree with
+    the rendered spans.
+    """
+    words = []
+    for section in doc["sections"]:
+        for block in section["blocks"]:
+            if block["type"] in ("para", "take"):
+                for run in block["runs"]:
+                    words.extend(run["text"].split())
+    return words
+
+
+def take_word_ranges(doc):
+    """Return [start, end) global word-index pairs for the doc's take blocks.
+
+    Indexes are in speakable_words(doc) order (the UI's data-i indexing):
+    the ranges partition off exactly the words that speakable_words yields
+    from take blocks, one pair per take block in document order. Empty take
+    blocks (no runs survive ingestion) produce no range. Phase B's aligner
+    uses these to treat take words as free to skip.
+    """
+    ranges = []
+    i = 0
+    for section in doc["sections"]:
+        for block in section["blocks"]:
+            if block["type"] in ("para", "take"):
+                n = sum(len(run["text"].split()) for run in block["runs"])
+                if block["type"] == "take" and n:
+                    ranges.append([i, i + n])
+                i += n
+    return ranges
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("file", help="path to the script file")
