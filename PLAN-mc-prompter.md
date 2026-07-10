@@ -73,7 +73,7 @@ Port handling (review finding): default port 8770 (mc-ograf's ephemeral verifier
 ASR models downloaded into `models/`:
 
 - Primary: sherpa-onnx export of nvidia nemotron-speech-streaming-en-0.6b, int8 (the streaming sibling of the parakeet family; NVIDIA Open Model License, commercial use permitted). Chunk setting 560 ms as the default latency point.
-- Fallback for low-end hardware: a small streaming zipformer English export (Apache-2.0), selectable via config.
+- Fallback lane finding (2026-07-09 spike): model exports are coupled to the sherpa-onnx runtime generation. The 2023 zipformer export silently produces garbage under the pinned sherpa-onnx 1.13.4 (it decodes correctly only under 1.10.x). Phase B therefore ships providers nemotron-streaming and none only; zipformer-small stays a planned lane (exits with a pointer if selected) until a current-generation small export is validated.
 - VAD: silero VAD via sherpa-onnx's built-in VoiceActivityDetector (one dependency covers both).
 
 ### Server and UI
