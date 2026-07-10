@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.11"
 # ///
-"""Launch the mc-prompter teleprompter server (Phase A).
+"""Launch the mc-prompter teleprompter server.
 
 Pure stdlib launcher. Probes the port, generates the session token, spawns
 the aiohttp server as a child process, confirms it is up, writes the session
@@ -11,6 +11,7 @@ file, prints the URLs, and waits on the child (Ctrl-C terminates it).
 Usage:
     uv run {skill-root}/scripts/run_prompter.py --script <abs path>
         [--port 8770] [--lan] [--owner-wpm 150] [--no-open]
+        [--workspace <abs path>] [--asr-provider nemotron-streaming|none]
 
 Behavior:
     port      default 8770. If busy, /health on 127.0.0.1 is queried (1 s
@@ -21,7 +22,18 @@ Behavior:
     spawn     `uv run --with aiohttp==3.12.15 python -m server.main <args>`
               with cwd set to this scripts directory so the server package
               resolves. Server args are all explicit: --port --host --script
-              --owner-wpm --session-file --token.
+              --owner-wpm --session-file --token --asr-provider, plus
+              --models-dir on the workspace path.
+    workspace when --workspace points at a ready prompter-lab (built by
+              ensure_workspace.py; venv present, model files present at
+              sane sizes; checked inline, nothing is shelled out), the
+              server is spawned with the workspace venv interpreter
+              (.venv/bin/python on POSIX, .venv\\Scripts\\python.exe on
+              Windows) from the same cwd, and --models-dir plus
+              --asr-provider are passed so voice-follow is available.
+              Without --workspace, or when it is not ready, the launcher
+              falls back to the uv-run spawn with --asr-provider none
+              (tier 1, classic prompter) and says so.
     session   token = secrets.token_urlsafe(16). After /health confirms the
               server is up, <tempdir>/mc-prompter/session-<port>.json is
               written: {"port": N, "pid": ..., "token": "...",
@@ -32,8 +44,9 @@ Behavior:
               it the server binds 127.0.0.1 and only localhost URLs print.
     --no-open skip opening the browser at the home page.
 
-Exit codes: 0 ok, 1 server failed to start, 2 usage, 4 script path missing
-or unreadable, 5 port conflict with an explicit --port.
+Exit codes: 0 ok, 1 server failed to start, 2 usage, 3 planned asr provider
+selected (zipformer-small; fails fast, nothing is spawned), 4 script path
+missing or unreadable, 5 port conflict with an explicit --port.
 """
 
 import argparse
@@ -62,6 +75,21 @@ HEALTH_TIMEOUT = 1.0
 # network. wait_for_health fails immediately if the child exits.
 STARTUP_TIMEOUT = 300.0
 PORT_SCAN_LIMIT = 20
+DEFAULT_ASR_PROVIDER = "nemotron-streaming"
+ASR_PROVIDERS = ("nemotron-streaming", "zipformer-small", "none")
+# Planned lanes stay valid argparse choices so the launcher (not argparse)
+# owns the message, but selecting one fails fast with exit 3 before any
+# spawn: nothing unvalidated pretends to run.
+ASR_PLANNED_PROVIDERS = ("zipformer-small",)
+# Lightweight readiness floors, mirroring ensure_workspace.py's layout
+# check (presence and size only; no subprocess, no imports).
+WORKSPACE_MODEL_MIN_SIZES = {
+    "models/nemotron-streaming/encoder.int8.onnx": 500_000_000,
+    "models/nemotron-streaming/decoder.int8.onnx": 5_000_000,
+    "models/nemotron-streaming/joiner.int8.onnx": 1_000_000,
+    "models/nemotron-streaming/tokens.txt": 4_000,
+    "models/silero_vad.onnx": 500_000,
+}
 
 
 class PortConflict(Exception):
@@ -150,21 +178,116 @@ def write_session_file(path, port, pid, token, script):
     return path
 
 
-def build_server_cmd(port, host, script, owner_wpm, session_file, token):
-    """The child process command; runs with cwd = the scripts directory."""
-    # Phase B seam: when the prompter-lab workspace exists, swap the
-    # `uv run --with` prefix for `<workspace>/.venv python -m server.main`
-    # (POSIX .venv/bin/python, Windows .venv\Scripts\python.exe) with the
-    # same cwd and the same explicit args. TODO(phase-b): implement the
-    # workspace-present branch here; do not add config discovery.
-    return [
-        "uv", "run", "--with", AIOHTTP_PIN, "python", "-m", "server.main",
+def venv_python_path(workspace, platform=sys.platform):
+    """The workspace venv interpreter path, resolved portably."""
+    workspace = Path(workspace)
+    if platform == "win32":
+        return workspace / ".venv" / "Scripts" / "python.exe"
+    return workspace / ".venv" / "bin" / "python"
+
+
+def workspace_ready(workspace):
+    """True when the prompter-lab layout looks complete.
+
+    Inline re-implementation of ensure_workspace.py --check semantics at
+    the file level (presence and size floors); deliberately no subprocess
+    and no venv import check, so launch stays instant.
+    """
+    workspace = Path(workspace)
+    if not venv_python_path(workspace).exists():
+        return False
+    for rel, min_size in WORKSPACE_MODEL_MIN_SIZES.items():
+        path = workspace / rel
+        if not path.is_file() or path.stat().st_size < min_size:
+            return False
+    return True
+
+
+def spawn_plan(workspace, asr_provider):
+    """Resolve the launch mode: (workspace-or-None, effective provider).
+
+    A ready workspace launches through its venv with the requested
+    provider (default nemotron-streaming). No workspace, or a not-ready
+    one, falls back to the tier-1 uv-run spawn with provider "none".
+    """
+    if workspace is not None and workspace_ready(workspace):
+        return workspace, (asr_provider or DEFAULT_ASR_PROVIDER)
+    return None, "none"
+
+
+def downgrade_notice(requested_ws, requested_provider, workspace):
+    """Lines explaining a tier-1 fallback; [] when nothing was downgraded.
+
+    An explicitly requested non-none provider that spawn_plan dropped to
+    "none" is always named, so the creator is never silently overridden.
+    """
+    if workspace is not None:
+        return []
+    explicit = requested_provider not in (None, "none")
+    lines = []
+    if requested_ws is not None:
+        lines.append(f"workspace not ready: {requested_ws}")
+        if explicit:
+            lines.append(
+                f"  requested --asr-provider {requested_provider} is "
+                "disabled (downgraded to none)"
+            )
+        lines.append(
+            "  launching the classic prompter (voice-follow off). "
+            "bootstrap the workspace with:"
+        )
+        lines.append(
+            f"  uv run {SCRIPTS_DIR / 'ensure_workspace.py'} "
+            f"--workspace {requested_ws}"
+        )
+    elif explicit:
+        lines.append(
+            f"note: --asr-provider {requested_provider} needs --workspace; "
+            "launching the classic prompter (voice-follow off, provider "
+            "downgraded to none)"
+        )
+    return lines
+
+
+def voice_follow_line(workspace, asr_provider):
+    """The launch banner's voice-follow line, honest about provider none."""
+    if workspace is not None and asr_provider != "none":
+        return (
+            f"  voice-follow: available ({asr_provider}, "
+            f"workspace {workspace})"
+        )
+    return "  voice-follow: off (classic prompter)"
+
+
+def build_server_cmd(port, host, script, owner_wpm, session_file, token,
+                     workspace=None, asr_provider="none"):
+    """The child process command; runs with cwd = the scripts directory.
+
+    With a workspace, the command is the workspace venv interpreter running
+    `-m server.main` (same cwd, so the server package resolves identically
+    on both paths) plus --models-dir and --asr-provider. Without one, it is
+    the uv-run spawn with --asr-provider none.
+    """
+    server_args = [
         "--port", str(port),
         "--host", host,
         "--script", str(script) if script else "",
         "--owner-wpm", str(owner_wpm or 0),
         "--session-file", str(session_file),
         "--token", token,
+    ]
+    if workspace is not None:
+        workspace = Path(workspace)
+        return [
+            str(venv_python_path(workspace)), "-m", "server.main",
+            *server_args,
+            "--models-dir", str(workspace / "models"),
+            "--asr-provider", asr_provider,
+        ]
+    return [
+        "uv", "run", "--with", AIOHTTP_PIN, "python", "-m", "server.main",
+        *server_args,
+        "--asr-provider", asr_provider,
     ]
 
 
@@ -251,7 +374,25 @@ def main(argv=None):
                         help="creator wpm for read-time estimates, 0 = unset")
     parser.add_argument("--no-open", action="store_true",
                         help="do not open the browser at the home page")
+    parser.add_argument("--workspace", default=None,
+                        help="prompter-lab workspace path (built by "
+                             "ensure_workspace.py); enables voice-follow "
+                             "when ready")
+    parser.add_argument("--asr-provider", default=None,
+                        choices=ASR_PROVIDERS,
+                        help="ASR provider for voice-follow (default "
+                             f"{DEFAULT_ASR_PROVIDER} when --workspace is "
+                             "given; planned lanes fail fast with exit 3)")
     args = parser.parse_args(argv)
+
+    if args.asr_provider in ASR_PLANNED_PROVIDERS:
+        print(
+            f"error: asr-provider {args.asr_provider!r} is a planned lane "
+            "and is not implemented yet; use "
+            f"{DEFAULT_ASR_PROVIDER} or none",
+            file=sys.stderr,
+        )
+        return 3
 
     script = Path(args.script).expanduser().resolve()
     if not script.is_file():
@@ -284,11 +425,18 @@ def main(argv=None):
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
+    requested_ws = (Path(args.workspace).expanduser().resolve()
+                    if args.workspace else None)
+    workspace, asr_provider = spawn_plan(requested_ws, args.asr_provider)
+    for line in downgrade_notice(requested_ws, args.asr_provider, workspace):
+        print(line)
+
     host = "0.0.0.0" if args.lan else "127.0.0.1"
     token = secrets.token_urlsafe(16)
     session_file = session_file_path(port)
     cmd = build_server_cmd(port, host, script, args.owner_wpm,
-                           session_file, token)
+                           session_file, token,
+                           workspace=workspace, asr_provider=asr_provider)
 
     child = spawn_server(cmd)
     try:
@@ -303,6 +451,7 @@ def main(argv=None):
         base_url = f"http://127.0.0.1:{port}"
         local_url = f"{base_url}/?token={token}"
         print(f"mc-prompter is up (session {token[:8]})")
+        print(voice_follow_line(workspace, asr_provider))
         print(f"  home:    {local_url}")
         print(f"  prompt:  {base_url}/prompt")
         print(f"  remote:  http://127.0.0.1:{port}/remote?token={token}")

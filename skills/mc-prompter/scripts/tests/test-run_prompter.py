@@ -2,19 +2,24 @@
 # /// script
 # requires-python = ">=3.11"
 # ///
-"""Tests for run_prompter.py (mc-prompter Phase A launcher).
+"""Tests for run_prompter.py (mc-prompter launcher).
 
 Run directly:
     uv run skills/mc-prompter/scripts/tests/test-run_prompter.py
 
 Pure stdlib unittest. Unit-tests the port-probe, health-identity, port
-selection, session-file, and command-building helpers by importing them.
-Nothing spawns the real server (spawn logic lives only in main(), which
-these tests never call); the only sockets used are loopback listeners
-opened inside the tests themselves.
+selection, session-file, command-building, workspace-readiness, and
+launch-message helpers by importing them. Nothing spawns the real server:
+main() is called only on the planned-provider path, which fails fast with
+exit 3 before script validation or any spawn. The only sockets used are
+loopback listeners opened inside the tests themselves. Ready-looking
+workspaces are fabricated with sparse files truncated to the size floors;
+no models, no downloads.
 """
 
+import contextlib
 import http.server
+import io
 import json
 import socket
 import sys
@@ -191,6 +196,172 @@ class TestBuildServerCmd(unittest.TestCase):
         cmd = rp.build_server_cmd(8770, "0.0.0.0", "", 0, "s.json", "t")
         self.assertEqual(cmd[cmd.index("--script") + 1], "")
         self.assertEqual(cmd[cmd.index("--owner-wpm") + 1], "0")
+
+
+def fabricate_workspace(root):
+    """A ready-looking prompter-lab: venv python + models at size floors."""
+    ws = Path(root)
+    py = rp.venv_python_path(ws)
+    py.parent.mkdir(parents=True, exist_ok=True)
+    py.write_bytes(b"")
+    for rel, min_size in rp.WORKSPACE_MODEL_MIN_SIZES.items():
+        path = ws / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "wb") as f:
+            f.truncate(min_size)
+    return ws
+
+
+class TestWorkspaceReadiness(unittest.TestCase):
+
+    def test_venv_python_path_posix(self):
+        p = rp.venv_python_path("/ws", platform="darwin")
+        self.assertEqual(p, Path("/ws/.venv/bin/python"))
+
+    def test_venv_python_path_windows(self):
+        p = rp.venv_python_path("/ws", platform="win32")
+        self.assertEqual(p, Path("/ws/.venv/Scripts/python.exe"))
+
+    def test_empty_workspace_is_not_ready(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertFalse(rp.workspace_ready(tmp))
+
+    def test_fabricated_workspace_is_ready(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fabricate_workspace(tmp)
+            self.assertTrue(rp.workspace_ready(tmp))
+
+    def test_truncated_model_is_not_ready(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = fabricate_workspace(tmp)
+            short = ws / "models" / "nemotron-streaming" / "encoder.int8.onnx"
+            with open(short, "wb") as f:
+                f.truncate(1000)
+            self.assertFalse(rp.workspace_ready(ws))
+
+    def test_missing_venv_is_not_ready(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = fabricate_workspace(tmp)
+            rp.venv_python_path(ws).unlink()
+            self.assertFalse(rp.workspace_ready(ws))
+
+
+class TestSpawnPlan(unittest.TestCase):
+
+    def test_no_workspace_falls_back_to_none(self):
+        self.assertEqual(rp.spawn_plan(None, None), (None, "none"))
+
+    def test_no_workspace_ignores_a_requested_provider(self):
+        self.assertEqual(
+            rp.spawn_plan(None, "nemotron-streaming"), (None, "none"))
+
+    def test_not_ready_workspace_falls_back_to_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            self.assertEqual(rp.spawn_plan(ws, None), (None, "none"))
+
+    def test_ready_workspace_defaults_the_provider(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = fabricate_workspace(tmp)
+            self.assertEqual(
+                rp.spawn_plan(ws, None), (ws, "nemotron-streaming"))
+
+    def test_ready_workspace_passes_the_provider_through(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = fabricate_workspace(tmp)
+            self.assertEqual(rp.spawn_plan(ws, "none"), (ws, "none"))
+
+
+class TestPlannedProviderFailsFast(unittest.TestCase):
+
+    def test_zipformer_small_exits_3_before_any_spawn(self):
+        # the nonexistent script proves the planned-lane check runs first:
+        # main() returns 3 before script validation, port probing, or spawn
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            rc = rp.main(
+                ["--script", "/definitely/not/there.md",
+                 "--asr-provider", "zipformer-small"]
+            )
+        self.assertEqual(rc, 3)
+        self.assertIn("zipformer-small", err.getvalue())
+        self.assertIn("planned", err.getvalue())
+
+
+class TestDowngradeNotice(unittest.TestCase):
+
+    def test_ready_workspace_produces_no_notice(self):
+        ws = Path("/ws")
+        self.assertEqual(
+            rp.downgrade_notice(ws, "nemotron-streaming", ws), [])
+
+    def test_not_ready_workspace_names_the_dropped_provider(self):
+        text = "\n".join(
+            rp.downgrade_notice(Path("/ws"), "nemotron-streaming", None))
+        self.assertIn("workspace not ready", text)
+        self.assertIn("nemotron-streaming", text)
+        self.assertIn("ensure_workspace.py", text)
+
+    def test_not_ready_workspace_default_provider_no_provider_line(self):
+        text = "\n".join(rp.downgrade_notice(Path("/ws"), None, None))
+        self.assertIn("workspace not ready", text)
+        self.assertNotIn("--asr-provider", text)
+
+    def test_explicit_provider_without_workspace_is_called_out(self):
+        lines = rp.downgrade_notice(None, "nemotron-streaming", None)
+        self.assertEqual(len(lines), 1)
+        self.assertIn("nemotron-streaming", lines[0])
+        self.assertIn("--workspace", lines[0])
+
+    def test_tier1_defaults_are_silent(self):
+        self.assertEqual(rp.downgrade_notice(None, None, None), [])
+        self.assertEqual(rp.downgrade_notice(None, "none", None), [])
+
+
+class TestVoiceFollowLine(unittest.TestCase):
+
+    def test_available_with_a_real_provider(self):
+        line = rp.voice_follow_line(Path("/ws"), "nemotron-streaming")
+        self.assertIn("available", line)
+        self.assertIn("nemotron-streaming", line)
+
+    def test_off_when_provider_none_even_with_a_workspace(self):
+        # a creator who chose --asr-provider none must not read "available"
+        line = rp.voice_follow_line(Path("/ws"), "none")
+        self.assertIn("off", line)
+        self.assertNotIn("available", line)
+
+    def test_off_without_a_workspace(self):
+        self.assertIn("off", rp.voice_follow_line(None, "none"))
+
+
+class TestBuildServerCmdWorkspace(unittest.TestCase):
+
+    def test_workspace_command_shape(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            cmd = rp.build_server_cmd(
+                8770, "127.0.0.1", "/abs/script.md", 150,
+                "/tmp/mc-prompter/session-8770.json", "tok123",
+                workspace=ws, asr_provider="nemotron-streaming",
+            )
+            self.assertEqual(cmd[0], str(rp.venv_python_path(ws)))
+            self.assertEqual(cmd[1:3], ["-m", "server.main"])
+            self.assertNotIn("uv", cmd)
+            self.assertEqual(
+                cmd[cmd.index("--models-dir") + 1], str(ws / "models"))
+            self.assertEqual(
+                cmd[cmd.index("--asr-provider") + 1], "nemotron-streaming")
+            self.assertEqual(cmd[cmd.index("--port") + 1], "8770")
+            self.assertEqual(cmd[cmd.index("--token") + 1], "tok123")
+
+    def test_fallback_command_carries_provider_none(self):
+        cmd = rp.build_server_cmd(
+            8770, "127.0.0.1", "/abs/script.md", 150, "s.json", "t",
+        )
+        self.assertEqual(cmd[:2], ["uv", "run"])
+        self.assertNotIn("--models-dir", cmd)
+        self.assertEqual(cmd[cmd.index("--asr-provider") + 1], "none")
 
 
 class TestSpawnAndTerminate(unittest.TestCase):
