@@ -31,6 +31,9 @@
     <div class="hud-group">
       <span><span id="wpm-val" class="mono">150</span> <span class="dim">wpm</span></span>
       <span id="mode-chip" class="chip">manual</span>
+      <span id="voice-chip" class="chip clickable hidden" title="toggle voice follow">voice off</span>
+      <span id="voice-state-chip" class="chip hidden"></span>
+      <button id="btn-sim" class="hidden" title="dev: stream a WAV through the mic send path">sim wav</button>
       <button id="btn-sections">sections</button>
       <button id="btn-settings">settings</button>
       <button id="btn-help" title="keyboard help">?</button>
@@ -130,6 +133,13 @@
       </select>
     </div>
 
+    <hr class="sep" id="voice-sep">
+    <h2 id="voice-h">Voice follow</h2>
+    <div class="row" id="row-follow">
+      <label for="set-follow">Follow my voice (needs the ASR workspace)</label>
+      <input type="checkbox" id="set-follow">
+    </div>
+
     <hr class="sep">
     <h2>Script markers</h2>
     <div class="row">
@@ -158,13 +168,43 @@
           <tr><td><span class="kbd">c</span></td><td>countdown, then play</td></tr>
           <tr><td><span class="kbd">s</span></td><td>section list</td></tr>
           <tr><td><span class="kbd">d</span></td><td>settings drawer</td></tr>
+          <tr><td><span class="kbd">v</span></td><td>toggle voice follow (this machine only)</td></tr>
           <tr><td><span class="kbd">mouse wheel</span></td><td>speed up / down 2 wpm</td></tr>
-          <tr><td><span class="kbd">click a word</span></td><td>jump the eyeline to that word</td></tr>
+          <tr><td><span class="kbd">click a word</span></td><td>jump the eyeline to that word (re-anchors in voice follow)</td></tr>
           <tr><td><span class="kbd">?</span></td><td>this help</td></tr>
           <tr><td><span class="kbd">esc</span></td><td>close panels</td></tr>
         </tbody>
       </table>
       <p class="dim" style="margin-top:0.8rem">Close with <span class="kbd">esc</span> or click anywhere outside.</p>
+    </div>
+  </div>
+
+  <div id="preflight" class="modal hidden">
+    <div class="modal-box" id="preflight-box">
+      <h2>Voice follow preflight</h2>
+      <p class="dim" style="margin-top:0.4rem">
+        Check the mic before the take: pick the device, watch the level,
+        then read the first lines of your script until tracking passes.
+      </p>
+      <div class="row">
+        <label for="pf-device">Microphone</label>
+        <select id="pf-device"></select>
+      </div>
+      <div class="row">
+        <label>Input level</label>
+        <div id="pf-level"><div id="pf-level-bar"></div></div>
+      </div>
+      <ul id="pf-constraints" class="pf-list"></ul>
+      <div id="pf-status" class="dim">connecting...</div>
+      <div id="pf-partial" class="pf-partial dim">waiting for speech...</div>
+      <div class="row">
+        <span id="pf-track" class="chip warn">tracking: read the script from the top</span>
+      </div>
+      <div class="pf-actions">
+        <button id="pf-sim" class="hidden" title="dev: stream a WAV through the mic send path">sim wav</button>
+        <button id="pf-cancel">cancel</button>
+        <button id="pf-start" class="primary" disabled>start</button>
+      </div>
     </div>
   </div>
 
@@ -185,6 +225,7 @@
   <script src="/static/js/ws.js"></script>
   <script src="/static/js/settings.js"></script>
   <script src="/static/js/model.js"></script>
+  <script src="/static/js/audio.js"></script>
   <script src="/static/js/scroll.js"></script>
   <script src="/static/js/prompt.js"></script>
 </body>

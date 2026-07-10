@@ -129,10 +129,18 @@
     els.wpm.textContent = String(msg.wpm !== undefined ? msg.wpm : '--');
     els.posFill.style.width = (Math.min(Math.max(Number(msg.position) || 0, 0), 1) * 100) + '%';
     var playing = !!msg.playing;
-    els.btnToggle.textContent = playing ? 'pause' : 'play';
-    els.btnToggle.classList.toggle('playing', playing);
-    if (msg.countdown !== null && msg.countdown !== undefined) {
-      els.btnToggle.textContent = 'in ' + Math.ceil(msg.countdown) + 's';
+    if (msg.follow) {
+      // The leader is in voice follow: the view is moving with the speaker
+      // and play/pause commands are ignored there, so say FOLLOWING instead
+      // of offering a dead 'play'.
+      els.btnToggle.textContent = 'following';
+      els.btnToggle.classList.add('playing');
+    } else {
+      els.btnToggle.textContent = playing ? 'pause' : 'play';
+      els.btnToggle.classList.toggle('playing', playing);
+      if (msg.countdown !== null && msg.countdown !== undefined) {
+        els.btnToggle.textContent = 'in ' + Math.ceil(msg.countdown) + 's';
+      }
     }
     highlightSection();
   }

@@ -27,5 +27,26 @@ html, body {
 #badge .dot { background: var(--ok); }
 #badge.disconnected .dot { background: var(--danger); }
 
+/* Phase B: voice-follow indicator (speaking state + committed anchor). */
+
+#voice-badge {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  background: rgba(12, 19, 34, 0.85);
+  border: 1px solid rgba(79, 140, 255, 0.45);
+  border-radius: 999px;
+  padding: 0.45em 1em;
+  font-size: 14px;
+  color: #e8e8e8;
+}
+
+#voice-badge .dot { background: var(--dim); }
+#voice-badge.speaking .dot { background: var(--ok); }
+#voice-badge.held { color: var(--accent-2); }
+
 /* Phase C seam: the producer ambient rail and cue cards mount here. */
 #rail { position: fixed; top: 0; right: 0; }

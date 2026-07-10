@@ -44,6 +44,11 @@ body { background: #000; }
 #script .w { border-radius: 0.12em; }
 #script .w:hover { background: rgba(79, 140, 255, 0.22); cursor: pointer; }
 
+/* Voice-follow match tint: words at or before the committed anchor. Subtle
+   and inspectable, applied in O(changed words) batches from prompt.js. */
+
+#script .w.said { background: rgba(79, 140, 255, 0.14); opacity: 0.82; }
+
 /* TAKE paragraphs: already recorded, dimmed with a badge */
 
 #script .take {
@@ -202,6 +207,65 @@ body.hide-invented #script .invented::after { content: none; }
 #help-overlay table { border-collapse: collapse; width: 100%; }
 #help-overlay td { padding: 0.3rem 0.6rem; border-bottom: 1px solid var(--border); }
 #help-overlay td:first-child { white-space: nowrap; width: 9rem; }
+
+/* Voice-follow HUD chips */
+
+.chip.clickable { cursor: pointer; }
+.chip.clickable:hover { border-color: var(--accent); color: var(--text); }
+#voice-chip.on { color: var(--accent); border-color: var(--accent); }
+
+/* Voice-follow preflight panel */
+
+#preflight-box { width: min(34rem, 92vw); }
+
+#pf-level {
+  flex: 1.2 1 auto;
+  height: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-2);
+  overflow: hidden;
+}
+
+#pf-level-bar {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--ok), var(--accent));
+  transition: width 0.12s linear;
+}
+
+.pf-list {
+  list-style: none;
+  margin: 0.5rem 0;
+  font-size: 0.85rem;
+  color: var(--dim);
+}
+
+.pf-list li { padding: 0.12rem 0; }
+.pf-list li.warn { color: var(--accent-2); }
+
+.pf-partial {
+  min-height: 2.4em;
+  margin: 0.5rem 0;
+  padding: 0.45em 0.7em;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  font-size: 0.95rem;
+}
+
+.pf-partial.live { color: var(--text); }
+
+#pf-status { font-size: 0.85rem; margin: 0.3rem 0; }
+#pf-status.bad { color: var(--danger); }
+
+.pf-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+}
 
 /* Status toast */
 

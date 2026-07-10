@@ -13,6 +13,12 @@
   <!-- Phase A placeholder: a connect badge that hides itself. The producer
        ambient rail and cue cards (Phase C) mount into #rail. -->
   <div id="badge"><span class="dot"></span> mc-prompter session connected</div>
+
+  <!-- Phase B: voice-follow indicator, hidden until anchor/vad frames flow.
+       Shows speaking state and the committed anchor word index. -->
+  <div id="voice-badge" class="hidden"><span class="dot" id="voice-dot"></span>
+    <span id="voice-text">voice</span></div>
+
   <div id="rail"></div>
 
   <script src="/static/js/ws.js"></script>

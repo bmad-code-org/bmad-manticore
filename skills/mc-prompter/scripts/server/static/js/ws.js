@@ -6,12 +6,28 @@
  *   <- role    {type:"role", leader:true}            leader promotion
  *   <> cmd     {type:"cmd", cmd, value?, from?}      relayed by server to all
  *   <> state   {type:"state", position, section, playing, wpm, mode,
- *               elapsed, remaining, countdown}       leader prompt -> everyone
+ *               elapsed, remaining, countdown, follow}  leader prompt -> everyone
+ *               (follow:true while voice follow drives the leader, Phase B)
  *   <- doc-updated {type:"doc-updated", "doc-version"}  clients refetch /api/source
  *   <- error   {type:"error", message}
  *
+ * Phase B voice-follow extensions (server frames flow through on(type) like
+ * any other; the client additions are sendBinary and bufferedAmount):
+ *   -> capture-request {type:"capture-request"}         loopback pages only
+ *   <- capture-granted {type:"capture-granted"}
+ *   <- capture-denied  {type:"capture-denied", reason:"owned"|"loopback-only"}
+ *   -> capture-release {type:"capture-release"}
+ *   -> BINARY frames   raw little-endian PCM16 mono 16 kHz (owner only)
+ *   -> anchor-set  {type:"anchor-set", i:<global word index>}
+ *   <- asr         {type:"asr", kind:"partial"|"final", segment, text}
+ *   <- vad         {type:"vad", speaking:bool}
+ *   <- anchor      {type:"anchor", i:<committed word index>, held:bool}
+ *   <- asr-status  {type:"asr-status", ready:bool, behind:bool, queue:int}
+ *
  * Reconnects with exponential backoff. Close code 4403 means the token was
  * rejected; we stop retrying and flag state.rejected so pages can go read-only.
+ * A reconnect is a NEW connection: capture ownership is released server-side
+ * on disconnect, so pages must re-send capture-request after each welcome.
  */
 (function () {
   'use strict';
@@ -29,6 +45,10 @@
     var state = {
       connected: false,
       leader: false,
+      // Leadership is only known once a welcome or role frame has said who
+      // leads. Between onopen and welcome, leader is a stale default, so
+      // pages must not act on state.leader while leaderKnown is false.
+      leaderKnown: false,
       session: null,
       docVersion: null,
       snapshot: null,   // last state snapshot delivered in welcome
@@ -43,11 +63,13 @@
       if (msg.type === 'welcome') {
         state.session = msg.session || null;
         state.leader = !!msg.leader;
+        state.leaderKnown = true;
         state.docVersion = msg['doc-version'];
         state.snapshot = msg.snapshot || null;
         emitStatus();
       } else if (msg.type === 'role') {
         state.leader = !!msg.leader;
+        state.leaderKnown = true;
         emitStatus();
       }
       var fns = (listeners[msg.type] || []).concat(listeners['*'] || []);
@@ -84,6 +106,7 @@
       ws.onclose = function (ev) {
         state.connected = false;
         state.leader = false;
+        state.leaderKnown = false;
         if (ev && ev.code === 4403) {
           state.rejected = true;
           emitStatus();
@@ -125,6 +148,23 @@
           return true;
         }
         return false;
+      },
+
+      // sendBinary(buf): raw PCM16 audio frame (Phase B). The caller gates
+      // on capture-granted and bufferedAmount(); this only checks the socket.
+      sendBinary: function (buf) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(buf);
+          return true;
+        }
+        return false;
+      },
+
+      // Bytes queued on the socket but not yet flushed to the network.
+      // Infinity when there is no open socket, so backpressure checks
+      // (bufferedAmount() < threshold) also fail closed while disconnected.
+      bufferedAmount: function () {
+        return ws && ws.readyState === WebSocket.OPEN ? ws.bufferedAmount : Infinity;
       },
 
       // cmd(name, value): send a command frame per the protocol.

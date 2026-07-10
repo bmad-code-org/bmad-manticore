@@ -20,9 +20,15 @@
  * Countdown: beginCountdown(seconds) holds the scroll and counts down, then
  * flips to playing. The page renders the big digits from view().countdown.
  *
- * Phase B seam: voice-follow will drive targetPos via an easing setter
- * instead of the constant-rate integration in frame(); the surface, position
- * math, and word spans stay identical.
+ * Voice-follow (Phase B): setFollow(true) suspends the constant-rate WPM
+ * integration and instead eases the surface toward a pixel target set by
+ * setFollowTargetPx (the anchor word offset so it sits at the eyeline).
+ * Easing is an exponential approach with time constant ~400 ms and a capped
+ * speed, so a big re-anchor glides instead of teleporting. The target only
+ * moves when the page feeds new anchors; VAD silence or a held anchor simply
+ * stops feeding it, which freezes the scroll. setFollow(false) returns to
+ * manual WPM mode at the current position. The surface, position math, and
+ * word spans stay identical to Phase A.
  */
 (function () {
   'use strict';
@@ -43,8 +49,12 @@
       totalSeconds: null,    // timed-mode plan length
       elapsed: 0,            // seconds of play time accumulated
       countdownLeft: 0,
-      finished: false
+      finished: false,
+      follow: false          // voice-follow mode (Phase B)
     };
+
+    var FOLLOW_TAU = 0.4;    // easing time constant, seconds
+    var followTarget = 0;    // px the follow easing approaches
 
     var pos = 0;             // float scroll position (scrollTop rounds)
     var rafId = null;
@@ -105,8 +115,15 @@
         remaining: remainingSeconds(),
         countdown: st.countdownLeft > 0 ? st.countdownLeft : null,
         drift: driftSeconds(),
-        finished: st.finished
+        finished: st.finished,
+        follow: st.follow
       };
+    }
+
+    // Speed cap for follow easing: brisk enough to recover from a jump-cut
+    // re-anchor in about a second, never a full-viewport teleport per frame.
+    function maxFollowSpeed() {
+      return Math.max(surface.clientHeight * 1.5, 300);
     }
 
     function setScrollTop(v) {
@@ -126,7 +143,20 @@
       var dt = Math.min((ts - lastTs) / 1000, 0.25);
       lastTs = ts;
 
-      if (st.countdownLeft > 0) {
+      if (st.follow) {
+        // Voice-follow: exponential approach to followTarget, capped speed.
+        // Elapsed keeps counting (it is the take clock, silence included).
+        st.elapsed += dt;
+        var k = 1 - Math.exp(-dt / FOLLOW_TAU);
+        var step = (followTarget - pos) * k;
+        var maxStep = maxFollowSpeed() * dt;
+        if (step > maxStep) step = maxStep;
+        else if (step < -maxStep) step = -maxStep;
+        if (Math.abs(step) > 0.01) {
+          pos = Math.min(Math.max(pos + step, 0), scrollable());
+          setScrollTop(pos);
+        }
+      } else if (st.countdownLeft > 0) {
         st.countdownLeft = Math.max(st.countdownLeft - dt, 0);
         if (st.countdownLeft === 0) {
           st.playing = true;
@@ -150,7 +180,7 @@
 
       if (opts.onFrame) opts.onFrame(view());
 
-      if (!st.playing && st.countdownLeft <= 0) stopLoop();
+      if (!st.playing && st.countdownLeft <= 0 && !st.follow) stopLoop();
     }
 
     function startLoop() {
@@ -171,9 +201,34 @@
     var engine = {
       view: view,
       isPlaying: function () { return st.playing || st.countdownLeft > 0; },
+      isFollowing: function () { return st.follow; },
+
+      // Voice-follow mode (Phase B). While on, WPM integration and the
+      // countdown are suspended; frame() eases toward followTarget instead.
+      // Turning it off returns to manual pacing at the current position.
+      setFollow: function (on) {
+        var want = !!on;
+        if (st.follow === want) return;
+        st.follow = want;
+        st.playing = false;
+        st.countdownLeft = 0;
+        st.finished = false;
+        if (st.follow) {
+          followTarget = pos;
+          startLoop();
+        }
+        changed('follow');
+      },
+
+      // Set the pixel offset the follow easing approaches (the page passes
+      // anchor word offsetTop minus the eyeline offset). Clamped to range.
+      setFollowTargetPx: function (px) {
+        followTarget = Math.min(Math.max(Number(px) || 0, 0), scrollable());
+        if (st.follow) startLoop();
+      },
 
       play: function () {
-        if (st.playing) return;
+        if (st.playing || st.follow) return;
         st.finished = false;
         st.countdownLeft = 0;
         st.playing = true;
@@ -183,6 +238,7 @@
 
       // Countdown, then play. seconds <= 0 plays immediately.
       beginCountdown: function (seconds) {
+        if (st.follow) return;
         var s = Number(seconds) || 0;
         if (s <= 0) { engine.play(); return; }
         st.finished = false;
@@ -211,6 +267,7 @@
 
       restart: function () {
         pos = 0;
+        followTarget = 0;
         setScrollTop(0);
         st.elapsed = 0;
         st.playing = false;
@@ -242,9 +299,11 @@
         changed('mode');
       },
 
-      // Jump to an absolute pixel offset within the surface.
+      // Jump to an absolute pixel offset within the surface. In follow mode
+      // the target snaps along so the easing does not drag the view back.
       jumpToPx: function (px) {
         pos = Math.min(Math.max(px, 0), scrollable());
+        followTarget = pos;
         setScrollTop(pos);
         st.finished = false;
         changed('jump');
@@ -261,7 +320,7 @@
       // Adopt an externally caused scrollTop (manual drag or touch while
       // paused) so the next play resumes from where the user left the view.
       adoptScrollTop: function () {
-        if (selfScroll || st.playing || st.countdownLeft > 0) return;
+        if (selfScroll || st.playing || st.countdownLeft > 0 || st.follow) return;
         pos = surface.scrollTop;
         st.finished = false;
         changed('scroll');
