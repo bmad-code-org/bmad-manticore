@@ -37,6 +37,7 @@
         "./skills/mc-graphics",
         "./skills/mc-assets",
         "./skills/mc-audio",
+        "./skills/mc-prompter",
         "./skills/mc-package",
         "./skills/mc-stream-pack",
         "./skills/mc-retro"
