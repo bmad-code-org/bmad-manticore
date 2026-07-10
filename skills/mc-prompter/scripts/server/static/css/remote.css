@@ -1,0 +1,109 @@
+/* mc-prompter /remote styles. Phone-first, big touch targets. */
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 0.9rem;
+  gap: 0.9rem;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+header.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+header.bar h1 { font-size: 1.05rem; color: var(--dim); font-weight: 600; }
+
+#status {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.6rem;
+  text-align: center;
+}
+
+#status .stat {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.55rem 0.3rem;
+}
+
+#status .stat .v {
+  font-family: var(--font-mono);
+  font-size: 1.35rem;
+  display: block;
+}
+
+#status .stat .k {
+  color: var(--dim);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+#posbar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--panel-2);
+  overflow: hidden;
+}
+
+#posbar .fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width 0.25s linear;
+}
+
+#controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem;
+}
+
+#controls .span2 { grid-column: span 2; }
+
+#btn-toggle {
+  font-size: 1.7rem;
+  padding: 1em;
+}
+
+#btn-toggle.playing {
+  background: var(--accent-2);
+  color: #0c1322;
+  border-color: transparent;
+}
+
+#section-panel { flex: 1 1 auto; overflow-y: auto; }
+
+#section-panel h2 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  margin-bottom: 0.4rem;
+}
+
+#section-list { list-style: none; }
+
+#section-list li {
+  padding: 0.7rem 0.8rem;
+  margin: 0.3rem 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  cursor: pointer;
+}
+
+#section-list li.current { border-color: var(--accent); color: var(--accent); }
+
+#error-panel { text-align: center; margin-top: 20vh; }
+#error-panel .icon { font-size: 3rem; }

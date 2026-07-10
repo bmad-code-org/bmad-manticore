@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22><rect width=%2216%22 height=%2216%22 rx=%223%22 fill=%22%23101418%22/><rect x=%223%22 y=%227%22 width=%2210%22 height=%222%22 fill=%22%2360b8f0%22/></svg>">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>mc-prompter | prompt</title>
+  <link rel="stylesheet" href="/static/css/shared.css">
+  <link rel="stylesheet" href="/static/css/prompt.css">
+</head>
+<body>
+
+  <div id="stage">
+    <div id="surface" tabindex="0">
+      <div id="script"></div>
+    </div>
+    <div id="eyeline" class="style-line"></div>
+  </div>
+
+  <header id="hud">
+    <div class="hud-group">
+      <span id="conn" class="dot" title="connection"></span>
+      <span id="role-badge" class="chip warn hidden">display only</span>
+      <button id="btn-toggle">play</button>
+      <button id="btn-restart">restart</button>
+    </div>
+    <div class="hud-group">
+      <span class="clock"><span id="clock-elapsed">00:00</span> <span class="dim">/</span> <span id="clock-remaining">--:--</span></span>
+      <span id="drift-chip" class="chip hidden"></span>
+    </div>
+    <div class="hud-group">
+      <span><span id="wpm-val" class="mono">150</span> <span class="dim">wpm</span></span>
+      <span id="mode-chip" class="chip">manual</span>
+      <button id="btn-sections">sections</button>
+      <button id="btn-settings">settings</button>
+      <button id="btn-help" title="keyboard help">?</button>
+    </div>
+  </header>
+
+  <div id="countdown" class="hidden">
+    <div id="countdown-num">3</div>
+  </div>
+
+  <aside id="sections-drawer" class="drawer hidden">
+    <button class="close-x" data-close="sections-drawer">x</button>
+    <h2>Sections</h2>
+    <div id="est-time" class="dim"></div>
+    <ul id="sections-list"></ul>
+  </aside>
+
+  <aside id="settings-drawer" class="drawer hidden">
+    <button class="close-x" data-close="settings-drawer">x</button>
+    <h2>Playback</h2>
+    <div class="row">
+      <label for="set-wpm">Speed (wpm)</label>
+      <input type="number" id="set-wpm" min="10" max="1200" step="2" value="150">
+    </div>
+    <div class="row">
+      <label for="set-mode">Mode</label>
+      <select id="set-mode">
+        <option value="manual">manual (wpm)</option>
+        <option value="timed">timed (total minutes)</option>
+      </select>
+    </div>
+    <div class="row hidden" id="row-minutes">
+      <label for="set-minutes">Total minutes</label>
+      <input type="number" id="set-minutes" min="1" max="600" step="1" value="10">
+    </div>
+    <div class="row">
+      <label for="set-countdown">Countdown seconds</label>
+      <input type="number" id="set-countdown" min="0" max="60" step="1" value="3">
+    </div>
+
+    <hr class="sep">
+    <h2>Text</h2>
+    <div class="row">
+      <label for="set-font-stack">Font</label>
+      <select id="set-font-stack"></select>
+    </div>
+    <div class="row">
+      <label for="set-font-family">Custom font-family</label>
+    </div>
+    <div class="row">
+      <input type="text" id="set-font-family" style="flex:1" placeholder="CSS font-family">
+    </div>
+    <div class="row">
+      <label for="set-font-size">Font size (px)</label>
+      <input type="range" id="set-font-size" min="20" max="160" step="2">
+      <input type="number" id="set-font-size-n" min="20" max="160" step="2">
+    </div>
+    <div class="row">
+      <label for="set-line-height">Line height</label>
+      <input type="range" id="set-line-height" min="1.0" max="2.4" step="0.05">
+      <span id="set-line-height-v" class="mono dim"></span>
+    </div>
+    <div class="row">
+      <label for="set-margin">Margins (%)</label>
+      <input type="range" id="set-margin" min="0" max="35" step="1">
+      <span id="set-margin-v" class="mono dim"></span>
+    </div>
+    <div class="row">
+      <label for="set-text-color">Text color</label>
+      <input type="color" id="set-text-color">
+    </div>
+    <div class="row">
+      <label for="set-bg-color">Background</label>
+      <input type="color" id="set-bg-color">
+    </div>
+
+    <hr class="sep">
+    <h2>Display</h2>
+    <div class="row">
+      <label for="set-mirror-h">Mirror horizontal</label>
+      <input type="checkbox" id="set-mirror-h">
+    </div>
+    <div class="row">
+      <label for="set-mirror-v">Mirror vertical</label>
+      <input type="checkbox" id="set-mirror-v">
+    </div>
+    <div class="row">
+      <label for="set-eyeline">Eyeline position (%)</label>
+      <input type="range" id="set-eyeline" min="5" max="90" step="1">
+      <span id="set-eyeline-v" class="mono dim"></span>
+    </div>
+    <div class="row">
+      <label for="set-eyeline-style">Eyeline style</label>
+      <select id="set-eyeline-style">
+        <option value="line">line</option>
+        <option value="arrow">arrow</option>
+      </select>
+    </div>
+
+    <hr class="sep">
+    <h2>Script markers</h2>
+    <div class="row">
+      <label for="set-hide-takes">Hide TAKE paragraphs</label>
+      <input type="checkbox" id="set-hide-takes">
+    </div>
+    <div class="row">
+      <label for="set-show-invented">Show invented badges</label>
+      <input type="checkbox" id="set-show-invented">
+    </div>
+  </aside>
+
+  <div id="help-overlay" class="modal hidden">
+    <div class="modal-box">
+      <h2>Keyboard shortcuts</h2>
+      <table>
+        <tbody>
+          <tr><td><span class="kbd">space</span></td><td>play / pause</td></tr>
+          <tr><td><span class="kbd">up</span> / <span class="kbd">+</span></td><td>speed up 2 wpm</td></tr>
+          <tr><td><span class="kbd">down</span> / <span class="kbd">-</span></td><td>slow down 2 wpm</td></tr>
+          <tr><td><span class="kbd">left</span> / <span class="kbd">right</span></td><td>previous / next paragraph (presentation clickers work)</td></tr>
+          <tr><td><span class="kbd">home</span></td><td>restart from the top</td></tr>
+          <tr><td><span class="kbd">f</span></td><td>fullscreen</td></tr>
+          <tr><td><span class="kbd">m</span></td><td>cycle mirror modes (off, horizontal, vertical, both)</td></tr>
+          <tr><td><span class="kbd">e</span></td><td>toggle eyeline marker</td></tr>
+          <tr><td><span class="kbd">c</span></td><td>countdown, then play</td></tr>
+          <tr><td><span class="kbd">s</span></td><td>section list</td></tr>
+          <tr><td><span class="kbd">d</span></td><td>settings drawer</td></tr>
+          <tr><td><span class="kbd">mouse wheel</span></td><td>speed up / down 2 wpm</td></tr>
+          <tr><td><span class="kbd">click a word</span></td><td>jump the eyeline to that word</td></tr>
+          <tr><td><span class="kbd">?</span></td><td>this help</td></tr>
+          <tr><td><span class="kbd">esc</span></td><td>close panels</td></tr>
+        </tbody>
+      </table>
+      <p class="dim" style="margin-top:0.8rem">Close with <span class="kbd">esc</span> or click anywhere outside.</p>
+    </div>
+  </div>
+
+  <div id="token-error" class="modal hidden">
+    <div class="modal-box">
+      <h2>Session token rejected</h2>
+      <p style="margin-top:0.6rem">
+        This display could not join the session, so it cannot mirror or drive
+        the prompter. Open it again from the links on the prompter home page,
+        or use a URL that ends in <span class="mono">?token=...</span> from
+        the machine that launched the server.
+      </p>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script src="/static/js/ws.js"></script>
+  <script src="/static/js/settings.js"></script>
+  <script src="/static/js/model.js"></script>
+  <script src="/static/js/scroll.js"></script>
+  <script src="/static/js/prompt.js"></script>
+</body>
+</html>

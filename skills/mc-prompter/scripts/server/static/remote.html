@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22><rect width=%2216%22 height=%2216%22 rx=%223%22 fill=%22%23101418%22/><rect x=%223%22 y=%227%22 width=%2210%22 height=%222%22 fill=%22%2360b8f0%22/></svg>">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>mc-prompter | remote</title>
+  <link rel="stylesheet" href="/static/css/shared.css">
+  <link rel="stylesheet" href="/static/css/remote.css">
+</head>
+<body>
+
+  <div id="error-panel" class="hidden">
+    <div class="icon">&#9888;</div>
+    <h1>Remote unavailable</h1>
+    <p id="error-msg" class="dim" style="margin-top:0.6rem">
+      This remote needs the session token. Open the exact remote URL shown on
+      the prompter home page (it ends in ?token=...).
+    </p>
+  </div>
+
+  <div id="app" class="hidden">
+    <header class="bar">
+      <h1>mc-prompter remote</h1>
+      <span><span id="conn" class="dot"></span> <span id="session" class="dim mono"></span></span>
+    </header>
+
+    <div id="status">
+      <div class="stat"><span class="v" id="st-elapsed">00:00</span><span class="k">elapsed</span></div>
+      <div class="stat"><span class="v" id="st-remaining">--:--</span><span class="k">remaining</span></div>
+      <div class="stat"><span class="v" id="st-wpm">--</span><span class="k">wpm</span></div>
+    </div>
+
+    <div id="posbar"><div class="fill" id="pos-fill"></div></div>
+
+    <div id="controls">
+      <button id="btn-toggle" class="big span2">play</button>
+      <button id="btn-slower" class="big">&minus;2 wpm</button>
+      <button id="btn-faster" class="big">+2 wpm</button>
+      <button id="btn-prev" class="big">&#8592; section</button>
+      <button id="btn-next" class="big">section &#8594;</button>
+      <button id="btn-restart" class="span2">restart from top</button>
+    </div>
+
+    <div id="section-panel" class="panel">
+      <h2>Sections <span id="sec-count" class="dim"></span></h2>
+      <ul id="section-list"></ul>
+    </div>
+  </div>
+
+  <script src="/static/js/ws.js"></script>
+  <script src="/static/js/model.js"></script>
+  <script src="/static/js/remote.js"></script>
+</body>
+</html>
