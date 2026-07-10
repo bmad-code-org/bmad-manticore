@@ -24,3 +24,17 @@ persistent_facts = []
 # Default port for the prompter server; the studio config's
 # [prompter] port overrides this when set.
 port = 8770
+
+# Voice-follow ASR provider. Working values: "nemotron-streaming"
+# (default, streaming English ASR via sherpa-onnx) and "none" (classic
+# prompter, no ASR). "zipformer-small" is a planned lane for low-end
+# hardware; selecting it makes the server exit with a pointer, it never
+# pretends to run. The studio config's [prompter] asr-provider overrides
+# this when set.
+asr-provider = "nemotron-streaming"
+
+# Engine workspace folder for voice-follow, resolved by the skill as
+# {engines-path}/{workspace} when a studio config exists. Holds the ASR
+# venv and model files; the first bootstrap downloads ~465 MB and is
+# consent-gated by the skill. The classic prompter needs no workspace.
+workspace = "prompter-lab"
