@@ -398,5 +398,103 @@ class TestLocalIp(unittest.TestCase):
         self.assertGreaterEqual(ip.count("."), 3)
 
 
+# ---------------------------------------------------------------------------
+# Phase C: producer-mode pass-through flags and the rundown/llm guards.
+# main() is still only ever called on paths that fail fast before any
+# port probe or spawn.
+# ---------------------------------------------------------------------------
+
+
+class TestBuildServerCmdProducer(unittest.TestCase):
+
+    def test_producer_flags_passed_through(self):
+        cmd = rp.build_server_cmd(
+            8770, "127.0.0.1", "", 0, "s.json", "t",
+            rundown="/abs/rundown.md", llm_provider="ollama",
+            llm_endpoint="http://localhost:11500", llm_model="qwen3:1.7b",
+            cue_density="minimal",
+        )
+        self.assertEqual(cmd[cmd.index("--rundown") + 1], "/abs/rundown.md")
+        self.assertEqual(cmd[cmd.index("--llm-provider") + 1], "ollama")
+        self.assertEqual(
+            cmd[cmd.index("--llm-endpoint") + 1], "http://localhost:11500"
+        )
+        self.assertEqual(cmd[cmd.index("--llm-model") + 1], "qwen3:1.7b")
+        self.assertEqual(cmd[cmd.index("--cue-density") + 1], "minimal")
+
+    def test_no_rundown_omits_the_flag_but_keeps_llm_defaults(self):
+        cmd = rp.build_server_cmd(
+            8770, "127.0.0.1", "/abs/script.md", 150, "s.json", "t",
+        )
+        self.assertNotIn("--rundown", cmd)
+        self.assertEqual(cmd[cmd.index("--llm-provider") + 1], "none")
+        self.assertEqual(
+            cmd[cmd.index("--llm-endpoint") + 1], rp.DEFAULT_LLM_ENDPOINT
+        )
+        self.assertEqual(
+            cmd[cmd.index("--llm-model") + 1], rp.DEFAULT_LLM_MODEL
+        )
+        self.assertEqual(
+            cmd[cmd.index("--cue-density") + 1], rp.DEFAULT_CUE_DENSITY
+        )
+
+    def test_workspace_spawn_also_carries_producer_flags(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            cmd = rp.build_server_cmd(
+                8770, "127.0.0.1", "", 0, "s.json", "t",
+                workspace=ws, asr_provider="nemotron-streaming",
+                rundown="/abs/rundown.md", llm_provider="ollama",
+            )
+            self.assertEqual(cmd[0], str(rp.venv_python_path(ws)))
+            self.assertEqual(
+                cmd[cmd.index("--rundown") + 1], "/abs/rundown.md"
+            )
+            self.assertEqual(cmd[cmd.index("--llm-provider") + 1], "ollama")
+
+
+class TestProducerLaunchGuards(unittest.TestCase):
+
+    def _run_main(self, argv):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            rc = rp.main(argv)
+        return rc, err.getvalue()
+
+    def test_unknown_llm_provider_exits_3_before_any_spawn(self):
+        # the nonexistent script proves the llm guard runs first
+        rc, err = self._run_main(
+            ["--script", "/definitely/not/there.md",
+             "--llm-provider", "openai"]
+        )
+        self.assertEqual(rc, 3)
+        self.assertIn("openai", err)
+        self.assertIn("planned lane", err)
+
+    def test_missing_rundown_exits_4(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            script = Path(tmp) / "script.md"
+            script.write_text("# S\n\nWords.\n", encoding="utf-8")
+            rc, err = self._run_main(
+                ["--script", str(script),
+                 "--rundown", str(Path(tmp) / "missing-rundown.md")]
+            )
+        self.assertEqual(rc, 4)
+        self.assertIn("rundown not found", err)
+
+    def test_neither_script_nor_rundown_exits_2(self):
+        rc, err = self._run_main([])
+        self.assertEqual(rc, 2)
+        self.assertIn("--script", err)
+        self.assertIn("--rundown", err)
+
+    def test_missing_script_still_exits_4(self):
+        rc, err = self._run_main(
+            ["--script", "/definitely/not/there.md"]
+        )
+        self.assertEqual(rc, 4)
+        self.assertIn("script not found", err)
+
+
 if __name__ == "__main__":
     unittest.main()

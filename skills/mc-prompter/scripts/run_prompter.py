@@ -12,6 +12,9 @@ Usage:
     uv run {skill-root}/scripts/run_prompter.py --script <abs path>
         [--port 8770] [--lan] [--owner-wpm 150] [--no-open]
         [--workspace <abs path>] [--asr-provider nemotron-streaming|none]
+        [--rundown <abs path>] [--llm-provider none|ollama]
+        [--llm-endpoint <url>] [--llm-model <tag>]
+        [--cue-density hands-off|minimal|normal|chatty]
 
 Behavior:
     port      default 8770. If busy, /health on 127.0.0.1 is queried (1 s
@@ -43,10 +46,20 @@ Behavior:
               expect a Windows Firewall consent dialog on Windows. Without
               it the server binds 127.0.0.1 and only localhost URLs print.
     --no-open skip opening the browser at the home page.
+    rundown   --rundown enables producer mode (Phase C): the file's
+              existence is checked here (exit 4) and the path is passed
+              through; the server parses it. --rundown is an alternative
+              to --script (either may be given; with both, the server
+              prompts the rundown's scripted segments, and a bullets-only
+              rundown keeps the script on the scroll). The llm and
+              cue-density flags are pure pass-throughs; --llm-provider
+              accepts only none|ollama and anything else fails fast with
+              exit 3 (planned lane, nothing is spawned).
 
-Exit codes: 0 ok, 1 server failed to start, 2 usage, 3 planned asr provider
-selected (zipformer-small; fails fast, nothing is spawned), 4 script path
-missing or unreadable, 5 port conflict with an explicit --port.
+Exit codes: 0 ok, 1 server failed to start, 2 usage (including neither
+--script nor --rundown), 3 planned asr or llm provider selected (fails
+fast, nothing is spawned), 4 script or rundown path missing or unreadable,
+5 port conflict with an explicit --port.
 """
 
 import argparse
@@ -81,6 +94,14 @@ ASR_PROVIDERS = ("nemotron-streaming", "zipformer-small", "none")
 # owns the message, but selecting one fails fast with exit 3 before any
 # spawn: nothing unvalidated pretends to run.
 ASR_PLANNED_PROVIDERS = ("zipformer-small",)
+# LLM lane (Phase C producer mode): only ollama is implemented; any other
+# non-none value is treated as a planned lane and fails fast with exit 3
+# (validated here, not by argparse, so the message owns the exit code).
+LLM_PROVIDERS = ("none", "ollama")
+DEFAULT_LLM_ENDPOINT = "http://localhost:11434"
+DEFAULT_LLM_MODEL = "qwen3:4b"
+CUE_DENSITIES = ("hands-off", "minimal", "normal", "chatty")
+DEFAULT_CUE_DENSITY = "normal"
 # Lightweight readiness floors, mirroring ensure_workspace.py's layout
 # check (presence and size only; no subprocess, no imports).
 WORKSPACE_MODEL_MIN_SIZES = {
@@ -260,13 +281,19 @@ def voice_follow_line(workspace, asr_provider):
 
 
 def build_server_cmd(port, host, script, owner_wpm, session_file, token,
-                     workspace=None, asr_provider="none"):
+                     workspace=None, asr_provider="none", rundown=None,
+                     llm_provider="none",
+                     llm_endpoint=DEFAULT_LLM_ENDPOINT,
+                     llm_model=DEFAULT_LLM_MODEL,
+                     cue_density=DEFAULT_CUE_DENSITY):
     """The child process command; runs with cwd = the scripts directory.
 
     With a workspace, the command is the workspace venv interpreter running
     `-m server.main` (same cwd, so the server package resolves identically
     on both paths) plus --models-dir and --asr-provider. Without one, it is
-    the uv-run spawn with --asr-provider none.
+    the uv-run spawn with --asr-provider none. The Phase C producer flags
+    (--rundown only when given; the llm and cue-density flags always) are
+    pure pass-throughs appended on both paths.
     """
     server_args = [
         "--port", str(port),
@@ -275,6 +302,14 @@ def build_server_cmd(port, host, script, owner_wpm, session_file, token,
         "--owner-wpm", str(owner_wpm or 0),
         "--session-file", str(session_file),
         "--token", token,
+    ]
+    if rundown:
+        server_args += ["--rundown", str(rundown)]
+    server_args += [
+        "--llm-provider", llm_provider,
+        "--llm-endpoint", llm_endpoint,
+        "--llm-model", llm_model,
+        "--cue-density", cue_density,
     ]
     if workspace is not None:
         workspace = Path(workspace)
@@ -363,8 +398,22 @@ def wait_for_health(port, child, timeout=STARTUP_TIMEOUT):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--script", required=True,
-                        help="path to the script file to prompt")
+    parser.add_argument("--script", default=None,
+                        help="path to the script file to prompt "
+                             "(this, --rundown, or both)")
+    parser.add_argument("--rundown", default=None,
+                        help="rundown file path; enables producer mode "
+                             "(alternative to --script)")
+    parser.add_argument("--llm-provider", default="none",
+                        help="none | ollama for the producer's LLM tick "
+                             "(anything else is a planned lane, exit 3)")
+    parser.add_argument("--llm-endpoint", default=DEFAULT_LLM_ENDPOINT,
+                        help="Ollama endpoint (producer mode)")
+    parser.add_argument("--llm-model", default=DEFAULT_LLM_MODEL,
+                        help="Ollama model tag (producer mode)")
+    parser.add_argument("--cue-density", default=DEFAULT_CUE_DENSITY,
+                        choices=CUE_DENSITIES,
+                        help="cue budget (rundown frontmatter overrides)")
     parser.add_argument("--port", type=int, default=None,
                         help=f"port (default {DEFAULT_PORT}, "
                              "auto-increments when busy)")
@@ -393,16 +442,42 @@ def main(argv=None):
             file=sys.stderr,
         )
         return 3
+    if args.llm_provider not in LLM_PROVIDERS:
+        print(
+            f"error: llm-provider {args.llm_provider!r} is a planned lane "
+            "and is not implemented yet; use ollama or none",
+            file=sys.stderr,
+        )
+        return 3
 
-    script = Path(args.script).expanduser().resolve()
-    if not script.is_file():
-        print(f"error: script not found: {script}", file=sys.stderr)
-        return 4
-    try:
-        script.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
-        print(f"error: cannot read {script}: {exc}", file=sys.stderr)
-        return 4
+    if not args.script and not args.rundown:
+        print(
+            "error: give --script, --rundown, or both",
+            file=sys.stderr,
+        )
+        return 2
+    script = None
+    if args.script:
+        script = Path(args.script).expanduser().resolve()
+        if not script.is_file():
+            print(f"error: script not found: {script}", file=sys.stderr)
+            return 4
+        try:
+            script.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            print(f"error: cannot read {script}: {exc}", file=sys.stderr)
+            return 4
+    rundown = None
+    if args.rundown:
+        rundown = Path(args.rundown).expanduser().resolve()
+        if not rundown.is_file():
+            print(f"error: rundown not found: {rundown}", file=sys.stderr)
+            return 4
+        try:
+            rundown.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            print(f"error: cannot read {rundown}: {exc}", file=sys.stderr)
+            return 4
 
     explicit = args.port is not None
     requested = args.port if explicit else DEFAULT_PORT
@@ -434,9 +509,13 @@ def main(argv=None):
     host = "0.0.0.0" if args.lan else "127.0.0.1"
     token = secrets.token_urlsafe(16)
     session_file = session_file_path(port)
-    cmd = build_server_cmd(port, host, script, args.owner_wpm,
+    cmd = build_server_cmd(port, host, script or "", args.owner_wpm,
                            session_file, token,
-                           workspace=workspace, asr_provider=asr_provider)
+                           workspace=workspace, asr_provider=asr_provider,
+                           rundown=rundown, llm_provider=args.llm_provider,
+                           llm_endpoint=args.llm_endpoint,
+                           llm_model=args.llm_model,
+                           cue_density=args.cue_density)
 
     child = spawn_server(cmd)
     try:
@@ -446,12 +525,19 @@ def main(argv=None):
             terminate_server(child)
             return 1
 
-        write_session_file(session_file, port, child.pid, token, script)
+        write_session_file(session_file, port, child.pid, token,
+                           script or "")
 
         base_url = f"http://127.0.0.1:{port}"
         local_url = f"{base_url}/?token={token}"
         print(f"mc-prompter is up (session {token[:8]})")
         print(voice_follow_line(workspace, asr_provider))
+        if rundown is not None:
+            llm_note = (
+                f"llm {args.llm_model}" if args.llm_provider == "ollama"
+                else "llm off, deterministic rail only"
+            )
+            print(f"  producer: on ({rundown.name}, {llm_note})")
         print(f"  home:    {local_url}")
         print(f"  prompt:  {base_url}/prompt")
         print(f"  remote:  http://127.0.0.1:{port}/remote?token={token}")
