@@ -113,7 +113,7 @@ Seven ship by default: talking-head, screen-tutorial (real UI only, generated b-
 
 ## The skills
 
-16 skills, each self-contained: a skill ships its own defaults (`customize.toml`), scripts, and knowledge, and reads only its own folder, the installed BMad core scripts, and your project files.
+17 skills, each self-contained: a skill ships its own defaults (`customize.toml`), scripts, and knowledge, and reads only its own folder, the installed BMad core scripts, and your project files.
 
 | Skill | What it does |
 |---|---|
@@ -130,6 +130,7 @@ Seven ship by default: talking-head, screen-tutorial (real UI only, generated b-
 | mc-ograf | Editable broadcast graphics (DaVinci Resolve 21+ and OBS/SPX-GC) |
 | mc-assets | Farm b-roll stills/clips via your registered CLI tools (metered APIs opt-in), under generative-editing safety rules |
 | mc-audio | Farm sound, local-first: TTS narration and two-host dialogue (Kokoro-82M), instrumental beds (MusicGen-small), SFX (AudioLDM2); paid lanes opt-in |
+| mc-prompter | Browser teleprompter for the record stage and standalone shows: voice-follow scrolling (local streaming ASR) and producer mode (rundown-driven live shows with a timing rail, broadcast cues, and an OBS overlay; local Ollama opt-in) |
 | mc-package | Titles, thumbnails (verified at 120px), description, chapters, series A/B pairs, live-event mode |
 | mc-stream-pack | A complete branded OBS livestream asset pack |
 | mc-retro | Your post-publish notes edit the pipeline's own files, plus the post-publish wrap lane |
@@ -144,6 +145,7 @@ Taste lives in files (your voice bible, Production Bible, format profiles, brand
 
 - Proven in production: the full cut lane (parakeet-mlx word-level transcription validated on real footage, cut candidate detection, edl.json, FCPXML export, preview render with boundary-frame verification), Manny as the front door, setup and dependency checking, config resolution, project scaffolding, the OBS stream pack, and the retro loop.
 - New in 1.0, implemented and unit-tested, with the least real-project mileage: the render lane (composited preview and the offered final render), the expanded setup interview (render consent, video style, creator-emulation takeaways, headshots, guided voice bible), the Production Bible, creativity mandates and the CTA system, footage-first ingest and the livestream-vod format, series support, graphics render verification, the graphics toolkit (HTML render, snug framing, design-prompting lane), CLI-registry asset farming, and the mc-audio local sound lanes (validated end to end on Apple Silicon 2026-07-07).
+- Newest, implemented and unit-tested since that date: mc-prompter, the browser teleprompter service skill (classic prompter, voice-follow via local streaming ASR, and rundown-driven producer mode with an opt-in local Ollama lane).
 - The writing lane (braindump, outline, script) is the core promise and is wired end to end with live blacklist linting; it has had the least real-video exercise of the core stages, so treat your first run through it as a shakedown and feed mc-retro afterward.
 - Planned: Premiere (xmeml) and CMX3600 EDL export lanes, per-episode stream packs with the Ecamm target (the named 1.0.x fast-follow), multitrack recording support, local-first TTS/SFX/music lanes, and a research/show-prep skill. See [TODO.md](TODO.md) for the full roadmap.
 

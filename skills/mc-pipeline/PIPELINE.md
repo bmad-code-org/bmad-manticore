@@ -4,7 +4,7 @@ The master spec for the Manticore pipeline, owned by mc-pipeline (the router). I
 
 Conventions used below:
 
-- The studio config is the `[modules.manticore]` table in `{project-root}/_bmad/custom/config.toml` (personal overrides in `config.user.toml`), created by mc-setup and resolved with `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {project-root} --key modules.manticore`. Table names like `[owner]`, `[paths]`, `[video]`, `[render]`, `[style]`, `[cta]`, `[live]`, `[editor]`, `[transcription]`, `[assets]`, `[mcp]` refer to its sub-tables. (`[defaults.*]` names appear only inside mc-setup's `customize.toml`, the seed that mc-setup copies from; a resolved studio config has no `[defaults]` table.)
+- The studio config is the `[modules.manticore]` table in `{project-root}/_bmad/custom/config.toml` (personal overrides in `config.user.toml`), created by mc-setup and resolved with `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {project-root} --key modules.manticore`. Table names like `[owner]`, `[paths]`, `[video]`, `[render]`, `[style]`, `[cta]`, `[live]`, `[editor]`, `[transcription]`, `[assets]`, `[prompter]`, `[llm]`, `[mcp]` refer to its sub-tables. (`[defaults.*]` names appear only inside mc-setup's `customize.toml`, the seed that mc-setup copies from; a resolved studio config has no `[defaults]` table.)
 - `{projects-path}`, `{brand-path}`, `{formats-path}`, `{engines-path}` are the `[paths]` values resolved against `{project-root}`. If `[modules.manticore]` is empty, run mc-setup first; no stage skill proceeds without it.
 - Per-skill defaults and overrides live in each skill's `customize.toml`, resolved with `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root}`. Skills read only their own folder and project files, never another skill's folder.
 - "the creator" is the human owner configured in `[owner]`; skills address them by their configured name.
@@ -19,7 +19,7 @@ Format profiles select a subset of these stages (see the `stages:` frontmatter o
 | 2 | braindump | mc-braindump | | `braindump.md` (verbatim) |
 | 3 | outline | mc-outline | gate 1: outline | `outline.md` (hooks + outline + packaging promise) |
 | 4 | script | mc-script | | `script.md` (lint passed, craft QA passed) |
-| 5 | record | the creator | | `raw/*` recordings, constant frame rate |
+| 5 | record | the creator | | `raw/*` recordings, constant frame rate. The mc-prompter service skill offers an optional teleprompter for this creator-owned stage. |
 | 6 | cut | mc-cut | gate 2: cutplan | `transcript/words.json` (suffixed `<source-id>.words.json` when a project has multiple sources), `cut/candidates.json`, `cut/cutplan.md`, `cut/edl.json`, `cut/rough.fcpxml` (per `[editor] timeline-format`; `none` skips), `renders/preview.mp4` (fast low-res preview, re-rendered each iteration; once stage 8 has rendered overlays, the router sends the project back through mc-cut to re-render it with graphics composited) |
 | 7 | beats | mc-beats | gate 3: beats | `beats/beats.md` (the beat table), `beats/STORYBOARD.md` |
 | 8 | graphics | mc-graphics | | `graphics/` alpha MOVs + `graphics/HANDOFF.md`; on completion the router routes through mc-cut to re-render `renders/preview.mp4` with the overlays composited |

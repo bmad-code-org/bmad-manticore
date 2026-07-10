@@ -19,7 +19,7 @@ The anti-LLM-slop stage. The script is woven, not written.
 3. Lint: `uv run {skill-root}/scripts/lint_script.py {projects-path}/<slug>/script.md --blacklist {brand-path}/blacklist.md`. Fix every violation before presenting.
 4. Craft QA: run the checklist at `{workflow.craft_checklist}` (relative paths resolve against `{skill-root}`; default is the packaged 16-rule list), plus the manual QA list at the bottom of the creator's blacklist. Fix, do not annotate around, failures.
 5. Compute runtime from the real word count at the creator's measured wpm (`[owner] wpm` in the config) and state it. Flag if it misses the format's target length.
-6. Write `script.md` (with the `[INVENTED]` flags still visible), update project.json (append `script` to `stages_done`, set `stage` to the next entry in its `stages` array), and present. Tell the creator the ball is theirs: record, drop takes in `raw/` at constant frame rate. If `[TAKE ...]` markers exist, list the delta explicitly: which lines are already captured on the interview recording and which still need recording.
+6. Write `script.md` (with the `[INVENTED]` flags still visible), update project.json (append `script` to `stages_done`, set `stage` to the next entry in its `stages` array), and present. Tell the creator the ball is theirs: record, drop takes in `raw/` at constant frame rate. Offer the mc-prompter teleprompter for the recording; it prompts `script.md` directly and understands its markers. If `[TAKE ...]` markers exist, list the delta explicitly: which lines are already captured on the interview recording and which still need recording.
 
 ## Rules
 

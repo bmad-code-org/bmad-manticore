@@ -30,6 +30,7 @@ DEPS = [
     ("npx", True, "hyperframes CLI and registry blocks"),
     ("git", True, "project history"),
     ("yt-dlp", False, "pulling your published transcripts for the voice bible"),
+    ("ollama", False, "local LLM for the mc-prompter producer mode (opt-in)"),
 ]
 
 

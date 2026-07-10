@@ -41,6 +41,16 @@ class TestCheckDeps(unittest.TestCase):
         self.assertIn("uv", proc.stdout)
         self.assertIn(proc.returncode, (0, 1))
 
+    def test_ollama_row_optional(self):
+        proc = run(["--json"])
+        data = json.loads(proc.stdout)
+        rows = [r for r in data["results"] if r["dep"] == "ollama"]
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        self.assertFalse(row["required"])  # producer mode is opt-in; never fails the check
+        if not row["found"]:
+            self.assertIn("mc-prompter", row["detail"])
+
     def test_platform_gate_row(self):
         proc = run(["--json"])
         data = json.loads(proc.stdout)

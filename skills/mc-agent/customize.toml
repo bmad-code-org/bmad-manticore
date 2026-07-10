@@ -77,6 +77,11 @@ description = "What can I do here? Everything installed, Manticore and beyond"
 prompt = "Read {project-root}/_bmad/_config/bmad-help.csv (the merged catalog of every installed skill across all modules) and present what is actually available, grouped by module, surfacing only what is relevant to where the creator is. For anything Manticore-side needing more depth, load references/skills-map.md. If the catalog is missing, the studio is not built yet: route to onboarding."
 
 [[agent.menu]]
+code = "PR"
+description = "Teleprompter: prompt me, run my show, producer mode with a rundown"
+skill = "mc-prompter"
+
+[[agent.menu]]
 code = "GS"
 description = "Grow the studio: add a new skill or capability to Manticore"
 prompt = "Load references/growing-the-studio.md and follow it: check the help catalog for an existing skill first, prefer the BMB builder skills if available, suggest installing BMB if not, and otherwise apply the linked best practices plus the house rules. Scope the new capability with the creator before any file is written."

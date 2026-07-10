@@ -9,6 +9,14 @@ State as of 2026-07-07, the 1.0.0 release. Read AGENTS.md first (module conventi
 - resolve_import.py: push the exported timeline into a running DaVinci Resolve. Requires Resolve Studio (the scripting API is not in the free edition); the mc-cut offer stays gated on the script's implemented status. Native scripting remains the documented path; no MCP dependency.
 - HyperFrames engine workspace initialization at a pinned version on the first real graphics run (upstream is pre-1.0 and moves fast; v0.7.26 as of 2026-07-03).
 
+## mc-prompter fast-follows
+
+- Kokoro spoken cue tier: short formulaic phrases ("thirty seconds", "wrap") synthesized by a persistent kokoro instance, released only at pauses, headphones-only output (what keeps browser AEC unnecessary). Designed in mc-prompter's references/cueing.md; ships behind the `[prompter]` spoken-cues flag, which stays false until this lands.
+- zipformer-small ASR validation: model exports are coupled to the sherpa-onnx runtime generation (the 2023 zipformer export silently produces garbage under the pinned 1.13.4; it decodes correctly only under 1.10.x). The lane stays planned and exits with a pointer until a current-generation small export is validated end to end.
+- TLS for remote mic capture: getUserMedia needs a secure context, so tablet-as-mic over LAN requires shipping TLS; today the microphone is captured only on the server machine.
+- Take-log consumption by mc-cut: mc-prompter's session take log (script positions and timestamps per take) pre-anchors cut plans.
+- sherpa-onnx offline parakeet export: the candidate for the cross-platform transcription lane (see below); the prompter's sherpa-onnx dependency makes it cheaper to validate.
+
 ## 1.x roadmap
 
 ### Multitrack and multicam support

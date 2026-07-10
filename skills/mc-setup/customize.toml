@@ -184,6 +184,46 @@ api-key-env = ""
 # builds it with consent; an existing lab is reused, never duplicated.
 workspace = "audio-lab"
 
+[defaults.prompter]
+
+# Teleprompter defaults for the mc-prompter service skill (browser prompter
+# for the record stage and standalone shows; no stage, no gate).
+# Engine workspace folder for voice-follow, resolved as
+# {engines-path}/{workspace}. Holds the ASR venv and models (~465 MB,
+# consent-gated download); the classic prompter needs no workspace.
+workspace = "prompter-lab"
+# Voice-follow ASR provider: "nemotron-streaming" (the default, streaming
+# English ASR via sherpa-onnx) or "none" (classic prompter, no ASR).
+# "zipformer-small" is a planned lane; the server exits with a pointer if
+# it is selected, it never pretends to run.
+asr-provider = "nemotron-streaming"
+# Producer-mode cue frequency: "hands-off" (time-critical cues only),
+# "minimal", "normal", or "chatty". A rundown's frontmatter overrides this.
+cue-density = "normal"
+# Spoken cue tier (short synthesized phrases to headphones). Designed but
+# not shipped yet; ships false and stays false until the lane lands.
+spoken-cues = false
+# Default port for the prompter server (auto-increments when busy).
+port = 8770
+
+[defaults.llm]
+
+# Local LLM lane, used by mc-prompter's producer mode for coverage
+# judgments and cue suggestions. Local-first like every other lane:
+# "ollama" is the only implemented provider; other rungs are planned,
+# opt-in only, and the producer exits with a pointer for anything else.
+# Producer mode degrades honestly without Ollama: the deterministic rail
+# and time cues still work, coverage judgments do not.
+provider = "ollama"
+# Any Ollama tag. On CPU-only machines the producer recommends and falls
+# back to a smaller tag (for example qwen3:1.7b).
+model = "qwen3:4b"
+endpoint = "http://localhost:11434"
+# Env var for a paid LLM lane's key. Stays empty for local lanes; set only
+# inside the explicit opt-in branch of the interview, pattern-consistent
+# with the other lanes.
+api-key-env = ""
+
 [defaults.mcp]
 
 # MCP servers mc-setup has verified in this project. Skills treat false/absent

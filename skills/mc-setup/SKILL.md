@@ -41,6 +41,10 @@ An existing `[modules.manticore]` that is missing any of the 1.0 tables (`[rende
 
 Finish with step 8 as usual so the migrated config is verified and the pending gaps are reported.
 
+#### 1b. Teleprompter backfill
+
+Separate from the 0.x rule above: a config that has the 1.0 tables but is missing `[prompter]` or `[llm]` is a current studio that predates the teleprompter, not a 0.x studio. Backfill both tables surgically from this skill's `[defaults]` (prompter, llm), leave everything else untouched, and offer the optional step 3e prompter interview without forcing it.
+
 ### 2. Dependencies
 
 Bootstrap first: check `uv --version`. If uv is missing, offer to install it; otherwise the official installer from docs.astral.sh/uv, and wait for the creator's confirmation; every pipeline script runs through uv, so nothing works without it.
@@ -96,6 +100,10 @@ Present `[audio]` and confirm the local-first defaults (the full ladder and its 
 - Disk and download honesty before any bootstrap: the engine workspace at `{engines-path}/audio-lab` needs a venv of several GB, ~340 MB of Kokoro models, and ~5 GB of Hugging Face cache on the first music/sfx run. Offer to build it now (`uv run` mc-audio's `ensure_workspace.py`) or defer; mc-audio asks again at first farming. An existing workspace (a lab the creator already built) is detected and reused, never rebuilt.
 - Paid audio lanes (Gemini TTS, ElevenLabs) exist behind the same keys as explicit opt-in choices; if, and only if, the creator picks one, set the provider and `api-key-env` now and handle key sourcing in step 7.
 
+### 3e. Teleprompter (optional)
+
+Offer the teleprompter briefly: the mc-prompter service skill gives the record stage a browser teleprompter, and the `[prompter]` defaults (workspace, ASR provider, cue density, port) are sane as shipped, so most creators just accept them. Only if the creator wants producer mode (a rundown-driven show with timing cues) mention that its coverage judgments use a local LLM via Ollama (`[llm]`, default model qwen3:4b) and never require it: without Ollama the deterministic rail and time cues still work. No downloads happen here; the voice-follow model download is consent-gated inside mc-prompter itself.
+
 ### 4. Brand build
 
 Create the four path folders if missing. The exit state is filled, never placeholders: a placeholder survives only when the creator genuinely has nothing to give, and every survivor goes on the step 8 pending list, loudly.
@@ -110,6 +118,7 @@ Into `{brand-path}`:
 - `voice-bible.md`: built in step 4b.
 - `headshots/`: collect 3 to 6 approved photos of the creator with varied expressions (neutral, surprised, thinking, excited). Auto-classify each expression, rename to expression-slug filenames, and write an `index.md` expression catalog (one line per photo: file, expression). Explain how they get used: when a thumbnail or asset needs the creator in it, the original photo goes to the configured image model with a "use the person in this image to ..." prompt, and any revision re-sends the same original photo, never a prior generation. State the rule inline: approved photos only; mc-package never uses arbitrary frames from footage. If no headshots exist yet, flag it loudly: thumbnails are blocked until they do.
 - `exemplars/` folder (filled in step 4b).
+- `templates/rundown-template.md` from `{skill-root}/assets/rundown-template.md` (never overwrite an existing copy): the starter rundown for mc-prompter's producer mode, kept in the studio so Manny and any skill can draft show rundowns from it without reading mc-prompter's folder.
 
 Into `{formats-path}`: copy every profile from `{skill-root}/assets/formats/` that does not already exist there (never overwrite; the creator's copies accumulate learnings).
 
@@ -154,7 +163,7 @@ Then scaffold `{project-root}/.env.example`:
 
 ### 8. Write and confirm
 
-Write the interview results as the `[modules.manticore]` table (with its sub-tables: owner, paths, video, render, style, cta, live, editor, transcription, assets, audio, mcp, and `[[modules.manticore.tools]]` entries) into `{project-root}/_bmad/custom/config.toml`. Edit surgically: create the file if needed, preserve everything else in it (other modules configure themselves there too), and preserve any sections the creator skipped. Mention `config.user.toml` for personal overrides in shared repos. Verify by running `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {project-root} --key modules.manticore` and showing the resolved summary.
+Write the interview results as the `[modules.manticore]` table (with its sub-tables: owner, paths, video, render, style, cta, live, editor, transcription, assets, audio, prompter, llm, mcp, and `[[modules.manticore.tools]]` entries) into `{project-root}/_bmad/custom/config.toml`. Edit surgically: create the file if needed, preserve everything else in it (other modules configure themselves there too), and preserve any sections the creator skipped. Mention `config.user.toml` for personal overrides in shared repos. Verify by running `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {project-root} --key modules.manticore` and showing the resolved summary.
 
 Close with the honest runnability report:
 

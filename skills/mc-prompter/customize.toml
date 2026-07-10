@@ -38,3 +38,26 @@ asr-provider = "nemotron-streaming"
 # venv and model files; the first bootstrap downloads ~465 MB and is
 # consent-gated by the skill. The classic prompter needs no workspace.
 workspace = "prompter-lab"
+
+# Producer-mode cue frequency: "hands-off" (time-critical attention cues
+# only), "minimal", "normal", or "chatty". A rundown's own frontmatter
+# cue-density overrides this; the studio config's [prompter] cue-density
+# overrides this default when set.
+cue-density = "normal"
+
+[llm]
+
+# Local LLM lane for producer mode's coverage judgments and cue
+# suggestions, mirroring the studio config's [llm] table (which overrides
+# these defaults when set). "ollama" is the only implemented provider;
+# anything else makes the server exit with a pointer, it never pretends
+# to run. Producer mode degrades honestly without Ollama: the
+# deterministic rail and time cues still work, coverage judgments do not.
+provider = "ollama"
+# Any Ollama tag; smaller tags (for example qwen3:1.7b) suit CPU-only
+# machines.
+model = "qwen3:4b"
+endpoint = "http://localhost:11434"
+# Env var for a paid LLM lane's key. Stays empty for local lanes,
+# pattern-consistent with the other lanes.
+api-key-env = ""

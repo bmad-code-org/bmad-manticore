@@ -145,6 +145,46 @@ Footage-first, when the video already exists:
 1. Hand Manny the file ("cut this VOD", "make a video from this recording"). mc-new's ingest mode registers the source and writes a post-production stage list that starts at cut.
 2. The same gates apply from the cut stage onward: cut plan, beats with CTAs mined from the transcript, graphics, packaging with dual-timeline chapters, the final render offer.
 
-## 10. Formats
+## 10. The teleprompter
+
+mc-prompter is a service skill, not a stage: say "prompt me" or "record with the teleprompter" and it launches a local browser prompter for the recording you were going to do anyway. It comes in three tiers, and each one is optional on top of the one below.
+
+The classic prompter needs nothing extra: no models, no downloads, no workspace. It serves a fullscreen scrolling display with the standard feature set (mirror flips for beam-splitter rigs, adjustable speed and fonts, countdown, timed mode, section jumps), a home page for loading or pasting text, and a phone remote over LAN whose URL carries a per-session token. Inside a pipeline project it prompts `script.md` directly and understands its markers: `[TAKE ...]` lines render dimmed because they were already spoken well on the interview footage, and `[INVENTED]` flags show as subtle badges. Editing from the home page backs up the file before writing, so the prompted text and the pipeline artifact never diverge.
+
+Voice-follow makes the scroll track your voice through the script using local streaming ASR. It needs the prompter-lab workspace (default `manticore/engines/prompter-lab`): a one-time download of about 465 MB of model files plus a small venv, and nothing downloads without your explicit go-ahead. Declining always leaves the classic prompter working. The first enable runs a preflight: pick your microphone, watch the level meter, and read a few words until the tracking check passes. After that, silence or ad-libs hold the scroll and it resumes when you return to the script; clicking any word re-anchors instantly. The microphone is captured on the machine running the server, so a tablet pointed at the page is display-only.
+
+Producer mode is for shows that run on talking points instead of a word-for-word script. You write a rundown, a small markdown file (a starter template lands in `{brand-path}/templates/rundown-template.md` during setup):
+
+```markdown
+---
+show: "Why local models win"
+duration-minutes: 30
+cue-density: normal
+wrap-minutes: 3
+---
+
+## Intro (3 min)
+
+Full scripted intro text, prompted normally.
+
+## Point 1: The cost argument (5 min)
+
+- cloud bills compound, local is capex
+- the anecdote that proves it
+
+## Wrap (3 min)
+
+Scripted wrap text.
+```
+
+Segments with prose prompt like a script; segments with only bullets become tracked talking points. Time budgets are optional, `wrap-minutes` protects your closing segment, and the home page shows the reconciled plan (with any warnings) before you go live.
+
+Running a show: hit GO LIVE on the prompt page or the phone remote to start the show clock. A rail shows elapsed time, the current segment with its remaining time in green, yellow, or red, and your next uncovered point; when you run long, the remaining time is replanned across what is left rather than just turning red. Cues speak broadcast in two tiers: quiet cards ("30 seconds", "STRETCH", "DROP: point 4, or 90s each") appear at your configured density, while "WRAP" and the overtime clock ("2:30 OVER") flash as high-contrast attention cues that ignore the density budget. Hold freezes the clock during technical trouble. The remote is your override authority: tap any point to mark it covered or skip it, jump between segments with make current, and the producer never un-marks anything you decided.
+
+For OBS, add `/overlay` as a browser source: it is transparent and renders only the rail, the cue cards, and small connection and voice-tracking badges, so your live audience sees a clean frame while you see the producer.
+
+What requires Ollama: only the coverage judgments, where a small local model (default `qwen3:4b`) reads the rolling transcript and proposes which points you have covered. Everything else in producer mode, the rail, the replanning, and every time cue, is deterministic code and works with no LLM at all; without Ollama you mark points covered from the remote yourself. Nothing metered, nothing cloud: the `[llm]` lane is local-first like every other lane.
+
+## 11. Formats
 
 Your `manticore/formats/` copies are yours to edit; each profile decides which stages run, carries structured density and beat-type frontmatter, and holds a Learnings section that retro appends to. Seven ship by default: talking-head, screen-tutorial (bans generated b-roll: real UI only), voiceover-explainer (narration is creator-recorded until the TTS lane lands), short (9:16 re-edit of a parent project), livestream-pack (an OBS asset pack, not a video), livestream-vod (footage-first post-production of a stream recording), course-lesson. A new format is a new markdown file.
