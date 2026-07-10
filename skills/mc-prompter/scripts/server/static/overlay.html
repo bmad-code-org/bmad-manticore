@@ -10,8 +10,7 @@
 </head>
 <body>
 
-  <!-- Phase A placeholder: a connect badge that hides itself. The producer
-       ambient rail and cue cards (Phase C) mount into #rail. -->
+  <!-- Connect badge (Phase A): hides itself after 5 s. -->
   <div id="badge"><span class="dot"></span> mc-prompter session connected</div>
 
   <!-- Phase B: voice-follow indicator, hidden until anchor/vad frames flow.
@@ -19,9 +18,15 @@
   <div id="voice-badge" class="hidden"><span class="dot" id="voice-dot"></span>
     <span id="voice-text">voice</span></div>
 
+  <!-- Phase C: the producer ambient rail and the cue card. Both stay empty
+       and invisible until a rundown session is running; the page background
+       is fully transparent for OBS. -->
   <div id="rail"></div>
+  <div id="cue"></div>
 
   <script src="/static/js/ws.js"></script>
+  <script src="/static/js/model.js"></script>
+  <script src="/static/js/rail.js"></script>
   <script src="/static/js/overlay.js"></script>
 </body>
 </html>

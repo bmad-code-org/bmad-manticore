@@ -1,13 +1,18 @@
 /* mc-prompter /overlay page glue.
  *
  * OBS browser source: transparent background, a small "session connected"
- * badge that hides itself 5 seconds after each (re)connect. Stays on the WS
- * so Phase C can mount the producer rail and cue cards without changing the
- * page contract.
+ * badge that hides itself 5 seconds after each (re)connect.
  *
  * Phase B: voice-follow anchor/vad frames light a small voice badge
  * (speaking dot, HOLD tint, committed word index) so a live operator can
  * see tracking state without the prompter display in view.
+ *
+ * Phase C: the real producer surface. Producer frames drive the ambient
+ * rail (show clock, G/Y/R, current segment, NEXT point, segment dots) and
+ * cue / cue-clear frames drive the single cue card. Before the first
+ * producer frame (the server broadcasts only on change), the rail is
+ * seeded from GET /api/rundown when /api/state reports producer.active.
+ * Everything stays hidden in tier 1/2 sessions (no rundown, no frames).
  */
 (function () {
   'use strict';
@@ -60,6 +65,29 @@
     renderVoice();
   });
 
-  // Phase C seam: subscribe here for producer rail state.
-  // ws.on('state', function (msg) { ... });
+  // ----- Phase C: producer rail + cue card -----
+
+  var rail = MC.rail.createRail(document.getElementById('rail'));
+  var cue = MC.rail.createCueCard(document.getElementById('cue'));
+  var gotProducerFrame = false;
+
+  ws.on('producer', function (msg) {
+    if (!msg.state) return;
+    gotProducerFrame = true;
+    rail.update(msg.state);
+  });
+
+  ws.on('cue', cue.onCue);
+  ws.on('cue-clear', cue.onClear);
+
+  // Pre-show seed: a live frame always wins over the synthesized state.
+  MC.model.fetchState(token).then(function (state) {
+    if (!(state && state.producer && state.producer.active)) return null;
+    return MC.model.fetchRundown(token).then(function (resp) {
+      var info = MC.rail.normalizeRundown(resp);
+      if (info && !gotProducerFrame) {
+        rail.update(MC.rail.preShowState(info.rundown));
+      }
+    });
+  }).catch(function () { /* tier 1/2 session: the rail stays hidden */ });
 })();

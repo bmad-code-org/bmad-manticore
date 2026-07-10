@@ -62,7 +62,12 @@
   function fetchSource(token) { return fetchJSON('/api/source', token); }
 
   // GET /api/state -> {snapshot, "doc-version", script, config}
+  // (Phase C adds .producer {active, live, llm {provider, model, ok}}.)
   function fetchState(token) { return fetchJSON('/api/state', token); }
+
+  // GET /api/rundown -> the parsed rundown + segment word ranges (Phase C).
+  // 404 when no rundown is loaded; callers treat that as producer-off.
+  function fetchRundown(token) { return fetchJSON('/api/rundown', token); }
 
   /* Render the script model into `container` (emptied first).
    * Returns an index used by the scroll engine and jump logic:
@@ -194,6 +199,7 @@
   window.MC.model = {
     fetchSource: fetchSource,
     fetchState: fetchState,
+    fetchRundown: fetchRundown,
     postJSON: postJSON,
     withToken: withToken,
     renderDoc: renderDoc,

@@ -48,5 +48,27 @@ html, body {
 #voice-badge.speaking .dot { background: var(--ok); }
 #voice-badge.held { color: var(--accent-2); }
 
-/* Phase C seam: the producer ambient rail and cue cards mount here. */
-#rail { position: fixed; top: 0; right: 0; }
+/* Phase C: the producer ambient rail (top center strip) and the single cue
+   card below it. Both elements paint their own translucent dark panels; the
+   page itself stays fully transparent (chroma-friendly, no background). */
+
+#rail {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 94vw;
+  width: max-content;
+}
+
+#rail .mc-rail { font-size: 16px; }
+
+#cue {
+  position: fixed;
+  top: 84px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 70vw;
+  display: flex;
+  justify-content: center;
+}

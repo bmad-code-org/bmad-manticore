@@ -32,6 +32,19 @@
  * Dev seam: ?sim-audio=1 adds "sim wav" buttons that fetch and decode a WAV
  * (path via prompt) and stream it through the exact same sendAudioFrame path
  * as the mic, so the end-to-end can be tested without a human speaking.
+ *
+ * Producer mode (Phase C): active when producer frames arrive (or /api/state
+ * reports producer.active). The ambient rail docks top or bottom (rail-dock
+ * setting); cue / cue-clear frames drive the single cue card near the
+ * eyeline. Scripted rundown segments use the normal scroll surface; bullets
+ * segments switch the stage to a large-type rail view (current point huge,
+ * next below, the rest dimmed). Segment handoff is manual (n / p keys, the
+ * remote's make-current) and, while voice follow drives the leader, anchor
+ * crossing a scripted segment's word-end sends make-current for the next
+ * segment. GO LIVE (big button pre-show, g key), hold / resume (h), and a
+ * two-tap end-show live in the HUD. All show / point commands go out as
+ * {"type":"show","cmd":...} / {"type":"point","cmd":...,"segment","point"};
+ * nothing here changes tier 1/2 behavior when no rundown is loaded.
  */
 (function () {
   'use strict';
@@ -214,6 +227,32 @@
 
     document.body.classList.toggle('hide-takes', !!s['hide-takes']);
     document.body.classList.toggle('hide-invented', !s['show-invented']);
+
+    // Producer chrome (Phase C): the cue card rides the eyeline, the rail
+    // follows the dock setting, and the bullets stage follows the reading
+    // colors so a beam-splitter rig keeps one look across segment kinds.
+    // The cue card is clamped to the free right margin so it never covers
+    // the words at the eyeline; when that margin is too narrow for a
+    // readable card, it docks as a band whose bottom edge sits just above
+    // the eyeline (over already-read text), keeping the read line clear.
+    var cueSideVw = Number(s['margin-percent']) - 2; // minus the 1vw offsets
+    if (cueSideVw >= 8) {
+      P.cueRegion.classList.remove('dock-band');
+      P.cueRegion.style.top = s['eyeline-percent'] + '%';
+      P.cueRegion.style.bottom = '';
+      P.cueRegion.style.maxWidth = 'min(' + cueSideVw + 'vw, 22rem)';
+    } else {
+      P.cueRegion.classList.add('dock-band');
+      P.cueRegion.style.top = 'auto';
+      P.cueRegion.style.bottom =
+        'calc(' + (100 - Number(s['eyeline-percent'])) + '% + 1rem)';
+      P.cueRegion.style.maxWidth = '';
+    }
+    P.rail.classList.toggle('dock-top', s['rail-dock'] !== 'bottom');
+    P.rail.classList.toggle('dock-bottom', s['rail-dock'] === 'bottom');
+    P.bstage.style.background = s['background-color'];
+    P.bstage.style.color = s['text-color'];
+    P.bstage.style.fontFamily = s['font-family'];
   }
 
   // Apply a settings mutation keeping the read position stable, since layout
@@ -254,7 +293,8 @@
     eyelineV: document.getElementById('set-eyeline-v'),
     eyelineStyle: document.getElementById('set-eyeline-style'),
     hideTakes: document.getElementById('set-hide-takes'),
-    showInvented: document.getElementById('set-show-invented')
+    showInvented: document.getElementById('set-show-invented'),
+    railDock: document.getElementById('set-rail-dock')
   };
 
   function initFontStackSelect() {
@@ -299,6 +339,7 @@
     C.eyelineStyle.value = s['eyeline-style'];
     C.hideTakes.checked = !!s['hide-takes'];
     C.showInvented.checked = !!s['show-invented'];
+    C.railDock.value = s['rail-dock'] === 'bottom' ? 'bottom' : 'top';
   }
 
   function wireSettingsControls() {
@@ -351,6 +392,9 @@
     });
     C.showInvented.addEventListener('change', function () {
       changeSetting('show-invented', C.showInvented.checked);
+    });
+    C.railDock.addEventListener('change', function () {
+      changeSetting('rail-dock', C.railDock.value);
     });
   }
 
@@ -732,6 +776,9 @@
         break;
       case 'ArrowRight':
         e.preventDefault();
+        // Bullets rail view (producer mode): the clicker's forward key marks
+        // the current point covered instead of a meaningless paragraph jump.
+        if (bulletsViewActive()) { coverCurrentPoint(); break; }
         act(function () { jumpParagraphs(1); }, 'jump-words', 1);
         break;
       case 'Home':
@@ -783,6 +830,30 @@
       case 'V':
         e.preventDefault();
         setFollowEnabled(!followEnabled);
+        break;
+      case 'g':
+      case 'G':
+        if (!producerActive || !producerState || producerState.live) break;
+        e.preventDefault();
+        sendShow('go-live');
+        break;
+      case 'h':
+      case 'H':
+        if (!producerActive || !producerState || !producerState.live) break;
+        e.preventDefault();
+        sendShow(producerState.hold ? 'resume' : 'hold');
+        break;
+      case 'n':
+      case 'N':
+        if (!producerActive) break;
+        e.preventDefault();
+        producerAdvance(1);
+        break;
+      case 'p':
+      case 'P':
+        if (!producerActive) break;
+        e.preventDefault();
+        producerAdvance(-1);
         break;
       case '?':
         e.preventDefault();
@@ -1267,6 +1338,293 @@
   V.btnSim.addEventListener('click', runSim);
   V.pfSim.addEventListener('click', runSim);
 
+  // ---------- producer mode (Phase C) ----------
+
+  var P = {
+    rail: document.getElementById('prompter-rail'),
+    cueRegion: document.getElementById('cue-region'),
+    goLivePanel: document.getElementById('golive-panel'),
+    btnGoLive: document.getElementById('btn-golive'),
+    prodBadge: document.getElementById('prod-badge'),
+    btnHold: document.getElementById('btn-hold'),
+    btnEnd: document.getElementById('btn-end'),
+    bstage: document.getElementById('bullets-stage'),
+    bSeg: document.getElementById('bstage-seg'),
+    bCurrent: document.getElementById('bstage-current'),
+    bNext: document.getElementById('bstage-next'),
+    bRest: document.getElementById('bstage-rest'),
+    bDone: document.getElementById('bstage-done'),
+    prodSep: document.getElementById('prod-sep'),
+    prodH: document.getElementById('prod-h'),
+    rowRailDock: document.getElementById('row-rail-dock')
+  };
+
+  var producerActive = false;
+  var producerState = null;    // latest producer frame or pre-show synth
+  var rundownInfo = null;      // {rundown, ranges} from GET /api/rundown
+  var prevSegmentId = null;    // for segment-handoff detection
+  var bulletsKey = '';         // rebuild the bullets DOM only on change
+  var handoffSentFor = null;   // scripted segment already advanced past
+  var handoffArmed = false;    // an anchor below the current segment's end
+                               // was seen since it became current
+  var coverPendingKey = null;  // covered sent, waiting for the next frame
+  var prodEndArmed = false;
+  var prodEndTimer = null;
+
+  var prodRail = MC.rail.createRail(P.rail);
+  var cueCard = MC.rail.createCueCard(P.cueRegion);
+
+  function sendShow(cmd) { ws.send({ type: 'show', cmd: cmd }); }
+
+  function sendPoint(cmd, segId, idx) {
+    var m = { type: 'point', cmd: cmd, segment: segId };
+    if (idx !== undefined && idx !== null) m.point = idx;
+    ws.send(m);
+  }
+
+  function currentProdSegment() {
+    return producerState ? MC.rail.segById(producerState, producerState.current) : null;
+  }
+
+  function bulletsViewActive() {
+    return producerActive && !P.bstage.classList.contains('hidden');
+  }
+
+  function activateProducer() {
+    if (producerActive) return;
+    producerActive = true;
+    P.prodSep.classList.remove('hidden');
+    P.prodH.classList.remove('hidden');
+    P.rowRailDock.classList.remove('hidden');
+    P.prodBadge.classList.remove('hidden');
+    if (!rundownInfo) fetchRundownInfo();
+  }
+
+  function fetchRundownInfo() {
+    MC.model.fetchRundown(token).then(function (resp) {
+      rundownInfo = MC.rail.normalizeRundown(resp);
+      // Pre-show seed: the server broadcasts producer frames only on
+      // change, so render the reconciled plan until the first one lands.
+      if (rundownInfo && !producerState) {
+        applyProducerState(MC.rail.preShowState(rundownInfo.rundown));
+      }
+    }).catch(function () { /* producer frames still drive the rail */ });
+  }
+
+  function disarmProdEnd() {
+    prodEndArmed = false;
+    clearTimeout(prodEndTimer);
+    P.btnEnd.classList.remove('armed');
+    P.btnEnd.textContent = 'end';
+  }
+
+  function renderProducerControls(state) {
+    var live = !!state.live;
+    var preShow = !live && (state['elapsed-s'] || 0) === 0;
+    P.goLivePanel.classList.toggle('hidden',
+      !(producerActive && preShow && ws.state.connected));
+    P.prodBadge.textContent = live ? (state.hold ? 'HOLD' : 'LIVE')
+      : preShow ? 'PRE-SHOW' : 'ENDED';
+    P.prodBadge.className = 'chip ' + (live ? (state.hold ? 'warn' : 'live') : '');
+    P.btnHold.classList.toggle('hidden', !live);
+    P.btnHold.textContent = state.hold ? 'resume' : 'hold';
+    P.btnEnd.classList.toggle('hidden', !live);
+    if (!live) disarmProdEnd();
+  }
+
+  // Manual segment handoff: n / p keys (and the remote's make-current).
+  function producerAdvance(delta) {
+    if (!producerState) return;
+    var segs = producerState.segments || [];
+    var idx = -1;
+    for (var i = 0; i < segs.length; i++) {
+      if (segs[i].id === producerState.current) { idx = i; break; }
+    }
+    var t = idx + delta;
+    if (t < 0 || t >= segs.length) {
+      toast('no ' + (delta > 0 ? 'next' : 'previous') + ' segment');
+      return;
+    }
+    sendPoint('make-current', segs[t].id);
+    toast('segment: ' + (segs[t].title || segs[t].id));
+  }
+
+  // Bullets rail view: the clicker forward key covers the current point;
+  // once the segment is fully covered it advances to the next segment.
+  function coverCurrentPoint() {
+    var seg = currentProdSegment();
+    if (!seg) return;
+    var idx = MC.rail.activePointIndex(seg);
+    if (idx < 0) { producerAdvance(1); return; }
+    var key = seg.id + ':' + idx;
+    if (coverPendingKey === key) return; // debounce until the next frame
+    coverPendingKey = key;
+    sendPoint('covered', seg.id, idx);
+  }
+
+  // Scripted <-> bullets stage switching and the make-current scroll jump.
+  function onSegmentChange(seg) {
+    if (!seg) return;
+    if (seg.kind === 'bullets') {
+      // The scroll surface is covered by the bullets stage; stop the WPM
+      // integrator so elapsed reading time is not silently consumed.
+      if (drives() && engine.isPlaying()) engine.pause();
+      return;
+    }
+    // Scripted: put the segment's first word on the eyeline. In voice
+    // follow the anchor is normally already there (the jump is a no-op);
+    // a make-current jump from the remote lands here too.
+    var range = rundownInfo && rundownInfo.ranges[seg.id];
+    if (drives() && range && docIndex.words[range.start]) {
+      var span = docIndex.words[range.start];
+      if (span.offsetParent !== null) {
+        engine.jumpToPx(span.offsetTop - eyelinePx());
+      }
+    }
+  }
+
+  function pointFlags(pt) {
+    return pt.covered ? 'c' : pt.skipped ? 's' : '.';
+  }
+
+  function updateBulletsStage(seg) {
+    var show = producerActive && !!seg && seg.kind === 'bullets';
+    P.bstage.classList.toggle('hidden', !show);
+    if (!show) { bulletsKey = ''; return; }
+
+    // Per-second refresh: segment title + replanned time left, colored.
+    var left = (seg['replanned-s'] || 0) - (seg['spent-s'] || 0);
+    P.bSeg.textContent = (seg.title || seg.id) + '  ' +
+      MC.rail.fmtClock(left) + ' left';
+    P.bSeg.className = MC.rail.timingClass(seg.timing);
+
+    var pts = seg.points || [];
+    var actIdx = MC.rail.activePointIndex(seg);
+    var nextIdx = -1;
+    if (actIdx >= 0) {
+      for (var i = actIdx + 1; i < pts.length; i++) {
+        if (!pts[i].covered && !pts[i].skipped) { nextIdx = i; break; }
+      }
+    }
+    var key = seg.id + ':' + actIdx + ':' + nextIdx + ':' +
+      pts.map(pointFlags).join('');
+    if (key === bulletsKey) return;
+    bulletsKey = key;
+
+    P.bCurrent.textContent = actIdx >= 0 ? pts[actIdx].text : '';
+    P.bCurrent.classList.toggle('hidden', actIdx < 0);
+    P.bDone.classList.toggle('hidden', actIdx >= 0 || !pts.length);
+    if (nextIdx >= 0) {
+      P.bNext.textContent = pts[nextIdx].text;
+      P.bNext.classList.remove('hidden');
+    } else {
+      P.bNext.classList.add('hidden');
+    }
+    while (P.bRest.firstChild) P.bRest.removeChild(P.bRest.firstChild);
+    for (var j = 0; j < pts.length; j++) {
+      if (j === actIdx || j === nextIdx) continue;
+      var li = document.createElement('li');
+      li.textContent = pts[j].text || '';
+      if (pts[j].covered) li.className = 'covered';
+      else if (pts[j].skipped) li.className = 'skipped';
+      P.bRest.appendChild(li);
+    }
+  }
+
+  function applyProducerState(state) {
+    if (!state) return;
+    producerState = state;
+    coverPendingKey = null;
+    prodRail.update(state);
+    P.rail.classList.remove('hidden');
+    renderProducerControls(state);
+    var seg = currentProdSegment();
+    if (state.current !== prevSegmentId) {
+      prevSegmentId = state.current;
+      handoffSentFor = null;
+      handoffArmed = false;
+      onSegmentChange(seg);
+    }
+    updateBulletsStage(seg);
+  }
+
+  // Anchor-driven handoff. Fires only when (a) voice follow drives the
+  // leader, (b) the rail's current segment is scripted, (c) the committed
+  // anchor CROSSED that segment's word-end while it was current (an anchor
+  // below the end must be seen first, so a stale anchor held over from a
+  // previous position, e.g. right after a backward make-current, can never
+  // fire it), and (d) at most once per segment per time it becomes current
+  // (both flags reset in applyProducerState when the current id changes).
+  // The server re-anchors the aligner whenever a scripted segment becomes
+  // current, so the arming frame arrives within a beat of any manual jump.
+  function maybeAnchorHandoff() {
+    if (!producerActive || !producerState || !followEnabled || !isLeader()) return;
+    if (!producerState.live) return;
+    var seg = currentProdSegment();
+    if (!seg || seg.kind !== 'scripted' || handoffSentFor === seg.id) return;
+    var range = rundownInfo && rundownInfo.ranges[seg.id];
+    if (!range || typeof range.end !== 'number') return;
+    // word-end is half-open ([start, end) in global word indices), so the
+    // segment's last word is end - 1: fire when the anchor commits it.
+    if (lastAnchor < Math.max(range.end - 1, range.start)) {
+      // Behind the end while this segment is current: any later crossing
+      // is genuine reading progress, so the handoff is now armed.
+      handoffArmed = true;
+      return;
+    }
+    if (!handoffArmed) return; // stale anchor from before this segment was current
+    var segs = producerState.segments || [];
+    for (var i = 0; i < segs.length; i++) {
+      if (segs[i].id === seg.id) {
+        if (i + 1 < segs.length) {
+          handoffSentFor = seg.id;
+          handoffArmed = false;
+          sendPoint('make-current', segs[i + 1].id);
+          toast('segment done: ' + (segs[i + 1].title || segs[i + 1].id));
+        }
+        return;
+      }
+    }
+  }
+
+  P.btnGoLive.addEventListener('click', function () { sendShow('go-live'); });
+
+  P.btnHold.addEventListener('click', function () {
+    if (producerState) sendShow(producerState.hold ? 'resume' : 'hold');
+  });
+
+  P.btnEnd.addEventListener('click', function () {
+    if (!prodEndArmed) {
+      prodEndArmed = true;
+      P.btnEnd.classList.add('armed');
+      P.btnEnd.textContent = 'really end?';
+      clearTimeout(prodEndTimer);
+      prodEndTimer = setTimeout(disarmProdEnd, 3000);
+      return;
+    }
+    disarmProdEnd();
+    sendShow('end');
+  });
+
+  ws.on('producer', function (msg) {
+    if (!msg.state) return;
+    activateProducer();
+    applyProducerState(msg.state);
+  });
+
+  ws.on('cue', cueCard.onCue);
+  ws.on('cue-clear', cueCard.onClear);
+
+  // Runs after the Phase B anchor listener (registration order), so
+  // lastAnchor is already updated when the handoff check reads it.
+  ws.on('anchor', function () { maybeAnchorHandoff(); });
+
+  ws.onStatus(function () {
+    // Keep the GO LIVE button honest across reconnects (it needs a live
+    // socket to mean anything).
+    if (producerState) renderProducerControls(producerState);
+  });
+
   // ---------- boot ----------
 
   initFontStackSelect();
@@ -1282,6 +1640,7 @@
       C.wpm.value = wpm;
     }
     asrAvailable = !!(state && state.asr && state.asr.available);
+    if (state && state.producer && state.producer.active) activateProducer();
     syncVoiceControls();
   }).catch(function () { /* defaults are fine */ }).then(loadSource);
 })();

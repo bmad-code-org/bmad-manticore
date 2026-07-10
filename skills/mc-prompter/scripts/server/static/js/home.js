@@ -10,6 +10,14 @@
  * other devices) and a warning explains where to find the full URL.
  * SEAM(token): if the server later exposes the token to loopback callers in
  * GET /api/state config, read it in fetchState() below.
+ *
+ * Rundown panel (Phase C): path load (POST /api/rundown/load, loopback only
+ * like script load) and the reconciled plan preview (segments with their
+ * reconciled budgets, kind, points, and any parser warnings) from GET
+ * /api/rundown, so the creator sees exactly what the producer will run
+ * before the show starts. A 404 from the load endpoint means the server
+ * predates runtime rundown loading; the message says to relaunch with
+ * --rundown instead of failing silently.
  */
 (function () {
   'use strict';
@@ -35,7 +43,20 @@
     btnSave: document.getElementById('btn-save'),
     btnRevert: document.getElementById('btn-revert'),
     dirtyChip: document.getElementById('dirty-chip'),
-    msg: document.getElementById('msg')
+    msg: document.getElementById('msg'),
+    prodActiveChip: document.getElementById('prod-active-chip'),
+    rundownPath: document.getElementById('rundown-path'),
+    btnRundownLoad: document.getElementById('btn-rundown-load'),
+    rundownHint: document.getElementById('rundown-hint'),
+    rundownMsg: document.getElementById('rundown-msg'),
+    rundownPlan: document.getElementById('rundown-plan'),
+    rdShow: document.getElementById('rd-show'),
+    rdDuration: document.getElementById('rd-duration'),
+    rdDensity: document.getElementById('rd-density'),
+    rdWrap: document.getElementById('rd-wrap'),
+    rdLlm: document.getElementById('rd-llm'),
+    rundownWarnings: document.getElementById('rundown-warnings'),
+    rundownSegsBody: document.getElementById('rundown-segs-body')
   };
 
   var TOKEN_STORE = 'mc-prompter-token';
@@ -179,6 +200,120 @@
     say('reverted to the last loaded text');
   });
 
+  // ---------- rundown panel (Phase C) ----------
+
+  function sayRundown(text, kind) {
+    els.rundownMsg.textContent = text || '';
+    els.rundownMsg.className = kind || '';
+  }
+
+  function renderPlan(resp) {
+    var info = MC.rail.normalizeRundown(resp);
+    if (!info) {
+      // 200 with {"rundown": null}: no rundown loaded, producer off.
+      els.rundownPlan.classList.add('hidden');
+      els.rundownHint.classList.remove('hidden');
+      return;
+    }
+    var rd = info.rundown;
+    els.rundownPlan.classList.remove('hidden');
+    els.rundownHint.classList.add('hidden');
+    els.rdShow.textContent = rd.show || '-';
+    els.rdDuration.textContent = MC.model.fmtClock(rd['duration-s']);
+    els.rdDensity.textContent = rd['cue-density'] || 'from config';
+    els.rdWrap.textContent = rd['wrap-s'] ? MC.model.fmtClock(rd['wrap-s']) : 'none';
+
+    var warnings = rd.warnings || [];
+    while (els.rundownWarnings.firstChild) els.rundownWarnings.removeChild(els.rundownWarnings.firstChild);
+    for (var w = 0; w < warnings.length; w++) {
+      var li = document.createElement('li');
+      li.textContent = warnings[w];
+      els.rundownWarnings.appendChild(li);
+    }
+
+    var body = els.rundownSegsBody;
+    while (body.firstChild) body.removeChild(body.firstChild);
+    var segs = rd.segments || [];
+    for (var i = 0; i < segs.length; i++) {
+      var seg = segs[i];
+      var tr = document.createElement('tr');
+      var tdTitle = document.createElement('td');
+      tdTitle.textContent = seg.title || seg.id;
+      var pts = seg.points || [];
+      if (pts.length) {
+        var pl = document.createElement('div');
+        pl.className = 'rd-points';
+        var texts = [];
+        for (var p = 0; p < pts.length; p++) texts.push(pts[p].text);
+        pl.textContent = texts.join(' / ');
+        tdTitle.appendChild(pl);
+      }
+      var tdKind = document.createElement('td');
+      tdKind.className = 'rd-kind';
+      tdKind.textContent = seg.kind || '-';
+      var tdTime = document.createElement('td');
+      tdTime.className = 'rd-time';
+      tdTime.textContent = MC.model.fmtClock(seg['planned-s']);
+      tr.appendChild(tdTitle);
+      tr.appendChild(tdKind);
+      tr.appendChild(tdTime);
+      body.appendChild(tr);
+    }
+  }
+
+  // Producer chip + LLM row from a /api/state payload. Called at boot and
+  // again after a runtime rundown load, which restarts the producer stack.
+  function renderProducerInfo(state) {
+    if (!(state && state.producer && state.producer.active)) return;
+    els.prodActiveChip.classList.remove('hidden');
+    var llm = state.producer.llm || {};
+    els.rdLlm.textContent = llm.provider && llm.provider !== 'none'
+      ? llm.provider + ' ' + (llm.model || '') + (llm.ok ? ' (ok)' : ' (unreachable: deterministic cues only)')
+      : 'off (deterministic rail and time cues only)';
+  }
+
+  function refreshProducerInfo() {
+    return MC.model.fetchState(token).then(renderProducerInfo)
+      .catch(function () { /* the chip alone still marks the load */ });
+  }
+
+  function refreshRundown() {
+    return MC.model.fetchRundown(token).then(function (resp) {
+      renderPlan(resp);
+    }).catch(function (err) {
+      if (err.status === 404) {
+        els.rundownPlan.classList.add('hidden');
+        els.rundownHint.classList.remove('hidden');
+      } else {
+        sayRundown('could not fetch the rundown: ' + err.message, 'bad');
+      }
+    });
+  }
+
+  els.btnRundownLoad.addEventListener('click', function () {
+    var path = els.rundownPath.value.trim();
+    if (!path) { sayRundown('enter an absolute path first', 'bad'); return; }
+    sayRundown('loading...');
+    MC.model.postJSON('/api/rundown/load', { path: path }, token).then(function () {
+      sayRundown('rundown loaded', 'ok');
+      els.prodActiveChip.classList.remove('hidden');
+      // The load restarted the producer stack: re-read /api/state so the
+      // producer LLM row reflects this session instead of the boot value.
+      refreshProducerInfo();
+      return refreshRundown();
+    }).catch(function (err) {
+      if (err.status === 404) {
+        sayRundown('this server cannot load a rundown at runtime; relaunch with --rundown ' + path, 'bad');
+      } else {
+        sayRundown('load failed: ' + err.message, 'bad');
+      }
+    });
+  });
+
+  els.rundownPath.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') els.btnRundownLoad.click();
+  });
+
   // ---------- WS wiring ----------
 
   ws.onStatus(function (s) {
@@ -214,8 +349,10 @@
     if (state && state.script && state.script.path) {
       els.pathInput.value = state.script.path;
     }
+    renderProducerInfo(state);
     renderEst();
   }).catch(function () { /* defaults are fine */ }).then(function () {
+    refreshRundown();
     return refreshSource(true);
   });
 })();

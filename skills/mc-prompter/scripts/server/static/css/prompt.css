@@ -267,6 +267,142 @@ body.hide-invented #script .invented::after { content: none; }
   margin-top: 0.9rem;
 }
 
+/* ---------- Phase C: producer chrome ---------- */
+
+/* Ambient rail: docked top (below the HUD gradient) or bottom. Operator
+   chrome, outside #stage, so mirror flips never apply to it. */
+
+#prompter-rail {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 18;
+  max-width: 96vw;
+  width: max-content;
+}
+
+#prompter-rail.dock-top { top: 3rem; }
+#prompter-rail.dock-bottom { bottom: 0.9rem; }
+
+/* Cue region: at the eyeline (prompt.js keeps top in sync with the eyeline
+   setting), right-aligned inside the script's right margin so the card sits
+   next to what is being read without covering it. prompt.js clamps
+   max-width to the free margin from the margin-percent setting; long cue
+   text wraps inside the card instead of intruding into the text column. */
+
+#cue-region {
+  position: fixed;
+  right: 1vw;
+  top: 33%;
+  transform: translateY(-50%);
+  z-index: 30;
+  max-width: min(22vw, 22rem);
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+/* Narrow-margin fallback (prompt.js adds the class when the free margin
+   cannot fit a readable card): the cue docks as a band just above the
+   eyeline, over already-read text, so the line being read stays clear.
+   Vertical position comes from prompt.js (bottom anchored to the eyeline). */
+
+#cue-region.dock-band {
+  left: 1vw;
+  max-width: none;
+  transform: none;
+}
+
+/* Pre-show GO LIVE control */
+
+#golive-panel {
+  position: fixed;
+  bottom: 4.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 45;
+}
+
+#btn-golive {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 0.6em 1.6em;
+  border-radius: 16px;
+  background: var(--danger);
+  color: #0c1322;
+  border-color: transparent;
+  box-shadow: 0 0 48px rgba(255, 51, 85, 0.35);
+}
+
+#prod-badge.live { color: var(--danger); border-color: var(--danger); }
+
+#btn-end.armed {
+  background: var(--danger);
+  color: #0c1322;
+  border-color: transparent;
+}
+
+/* Bullets-segment large-type rail view: covers the scroll surface and the
+   eyeline (z-index above both) while a bullets segment is current. Colors
+   and font follow the display settings via inline styles from prompt.js. */
+
+#bullets-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.2rem;
+  padding: 6vh 8vw;
+  background: #000;
+  overflow: hidden;
+}
+
+#bstage-seg {
+  font-size: 2.2vh;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+#bstage-current {
+  font-size: 7vh;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+#bstage-next {
+  font-size: 3.6vh;
+  line-height: 1.3;
+  opacity: 0.75;
+}
+
+#bstage-next::before {
+  content: "NEXT ";
+  font-size: 0.55em;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+  opacity: 1;
+}
+
+#bstage-rest {
+  list-style: none;
+  font-size: 2.6vh;
+  line-height: 1.5;
+  opacity: 0.4;
+  overflow: hidden;
+}
+
+#bstage-rest li.covered { text-decoration: line-through; opacity: 0.6; }
+#bstage-rest li.skipped { text-decoration: line-through; font-style: italic; opacity: 0.5; }
+
+#bstage-done {
+  font-size: 4.5vh;
+  font-weight: 700;
+  color: var(--ok);
+}
+
 /* Status toast */
 
 #toast {

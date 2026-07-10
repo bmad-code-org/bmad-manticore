@@ -15,6 +15,7 @@
  *   countdown-seconds  number  countdown before scroll starts (0 disables)
  *   hide-takes         bool    hide TAKE paragraphs entirely
  *   show-invented      bool    show the invented badge styling
+ *   rail-dock          string  "top" | "bottom", producer rail position
  *
  * Server config defaults (from GET /api/state .config) may be passed to
  * load() as overrides; stored per-device values still win over them.
@@ -38,7 +39,8 @@
     'eyeline-style': 'line',
     'countdown-seconds': 3,
     'hide-takes': false,
-    'show-invented': true
+    'show-invented': true,
+    'rail-dock': 'top'
   };
 
   // A few known-safe offline font stacks for the settings drawer select.

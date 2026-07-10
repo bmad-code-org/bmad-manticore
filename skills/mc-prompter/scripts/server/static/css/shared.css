@@ -205,3 +205,105 @@ input[type="checkbox"] { width: 1.1em; height: 1.1em; accent-color: var(--accent
 .row select { min-width: 9em; }
 
 hr.sep { border: 0; border-top: 1px solid var(--border); margin: 0.9rem 0; }
+
+/* ---------- producer rail (Phase C, shared by /prompt, /overlay, /remote) ----------
+   Ambient strip: no motion, glanceable, own translucent dark background so
+   it stays readable over the prompt page and stays chroma-friendly on the
+   transparent OBS overlay. */
+
+.mc-rail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.45rem 0.95rem;
+  background: rgba(12, 19, 34, 0.88);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+/* Timing colors (Toastmasters green/yellow/red against the replan). The
+   theme's good color stands in for green; yellow and red are literal. */
+
+.mc-rail .t-green, .t-green { color: var(--ok); }
+.mc-rail .t-yellow, .t-yellow { color: var(--accent-2); }
+.mc-rail .t-red, .t-red { color: var(--danger); }
+
+.mc-rail .r-clock { font-size: 1.1rem; }
+
+.mc-rail .r-seg {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.mc-rail .r-seg-title {
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 18rem;
+}
+
+.mc-rail .r-next {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--dim);
+}
+
+.mc-rail .r-dots { display: inline-flex; gap: 0.32rem; align-items: center; }
+
+.mc-rail .r-dot {
+  width: 0.62em;
+  height: 0.62em;
+  border-radius: 50%;
+  border: 1px solid var(--dim);
+  background: transparent;
+}
+
+.mc-rail .r-dot.done { background: var(--dim); border-color: var(--dim); opacity: 0.65; }
+.mc-rail .r-dot.current { background: currentColor; border-color: currentColor; }
+.mc-rail .r-dot.pending { border-color: var(--dim); background: transparent; color: var(--dim); }
+
+/* ---------- cue card (Phase C) ----------
+   One region, one active cue. Card tier appears quietly; attention tier is
+   the only element allowed to flash (time-critical states like WRAP). */
+
+.mc-cue {
+  background: rgba(12, 19, 34, 0.94);
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  padding: 0.55em 0.95em;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.mc-cue.tier-card { animation: mc-cue-in 0.35s ease-out; }
+
+.mc-cue.tier-attention {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+  color: #0c1322;
+  font-size: 1.9rem;
+  animation: mc-cue-pulse 0.7s ease-in-out 3;
+}
+
+@keyframes mc-cue-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes mc-cue-pulse {
+  0%, 100% { transform: scale(1); box-shadow: none; }
+  50% { transform: scale(1.05); box-shadow: 0 0 42px rgba(255, 204, 0, 0.65); }
+}

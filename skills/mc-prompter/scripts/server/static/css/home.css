@@ -110,3 +110,52 @@ header.top .sub { color: var(--dim); font-size: 0.9rem; }
 .note-small { font-size: 0.8rem; color: var(--dim); margin-top: 0.5rem; }
 
 #dirty-chip { margin-left: 0.4rem; }
+
+/* ---------- Phase C: rundown panel ---------- */
+
+#rundown-msg {
+  margin-top: 0.5rem;
+  font-size: 0.88rem;
+  min-height: 1.3em;
+}
+
+#rundown-msg.ok { color: var(--ok); }
+#rundown-msg.bad { color: var(--danger); }
+
+.warn-list { list-style: none; margin-top: 0.6rem; }
+
+.warn-list li {
+  color: var(--accent-2);
+  font-size: 0.85rem;
+  padding: 0.15rem 0;
+}
+
+.warn-list li::before { content: "warning: "; opacity: 0.8; }
+
+#rundown-segs {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.7rem;
+  font-size: 0.88rem;
+}
+
+#rundown-segs th {
+  text-align: left;
+  color: var(--dim);
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.25rem 0.5rem 0.25rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+#rundown-segs td {
+  padding: 0.32rem 0.5rem 0.32rem 0;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+#rundown-segs td.rd-kind { color: var(--dim); }
+#rundown-segs td.rd-time { font-family: var(--font-mono); white-space: nowrap; }
+#rundown-segs .rd-points { color: var(--dim); font-size: 0.82rem; margin-top: 0.15rem; }

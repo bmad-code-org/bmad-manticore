@@ -107,3 +107,118 @@ header.bar h1 { font-size: 1.05rem; color: var(--dim); font-weight: 600; }
 
 #error-panel { text-align: center; margin-top: 20vh; }
 #error-panel .icon { font-size: 3rem; }
+
+/* ---------- Phase C: tabs + producer view ---------- */
+
+#tabs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+#tabs .tab {
+  flex: 1 1 0;
+  padding: 0.55em 0.5em;
+  color: var(--dim);
+}
+
+#tabs .tab.active {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+#view-producer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+#prod-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem;
+}
+
+#prod-controls .span2 { grid-column: span 2; }
+
+#btn-golive {
+  font-size: 1.6rem;
+  padding: 0.9em;
+  background: var(--danger);
+  color: #0c1322;
+  border-color: transparent;
+  font-weight: 700;
+}
+
+#btn-golive:disabled { background: var(--panel-2); color: var(--dim); }
+
+#btn-hold.holding {
+  background: var(--accent-2);
+  color: #0c1322;
+  border-color: transparent;
+}
+
+#btn-end.armed {
+  background: var(--danger);
+  color: #0c1322;
+  border-color: transparent;
+}
+
+#prod-rail .mc-rail { font-size: 0.85rem; }
+
+#prod-segments { flex: 1 1 auto; overflow-y: auto; }
+
+#prod-segments h2 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  margin-bottom: 0.4rem;
+}
+
+.p-seg {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin: 0.45rem 0;
+  padding: 0.5rem 0.6rem;
+  background: var(--panel);
+}
+
+.p-seg.current { border-color: var(--accent); }
+.p-seg.done { opacity: 0.55; }
+
+.p-seg-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.p-seg-title {
+  flex: 1 1 auto;
+  font-weight: 650;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.p-seg-time { font-family: var(--font-mono); font-size: 0.9rem; }
+
+.p-seg-head .p-make { font-size: 0.8rem; padding: 0.3em 0.7em; white-space: nowrap; }
+
+.p-points { list-style: none; margin-top: 0.4rem; }
+
+.p-point {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.2rem;
+  border-top: 1px solid var(--border);
+}
+
+.p-point .p-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+
+.p-point.active .p-text { color: var(--accent); font-weight: 650; }
+.p-point.covered .p-text { color: var(--dim); text-decoration: line-through; }
+.p-point.skipped .p-text { color: var(--dim); text-decoration: line-through; font-style: italic; }
+
+.p-point .p-actions { display: flex; gap: 0.4rem; }
+.p-point .p-actions button { font-size: 0.8rem; padding: 0.3em 0.7em; }
+.p-point .p-flag { font-size: 0.72rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; }

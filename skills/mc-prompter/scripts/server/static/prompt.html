@@ -15,6 +15,29 @@
       <div id="script"></div>
     </div>
     <div id="eyeline" class="style-line"></div>
+
+    <!-- Phase C: large-type rail view for bullets segments. Lives inside
+         the stage so mirror flips apply to it like the scroll surface. -->
+    <div id="bullets-stage" class="hidden">
+      <div id="bstage-seg" class="dim"></div>
+      <div id="bstage-current"></div>
+      <div id="bstage-next" class="hidden"></div>
+      <ul id="bstage-rest"></ul>
+      <div id="bstage-done" class="hidden">all points covered, move on</div>
+    </div>
+  </div>
+
+  <!-- Phase C: producer ambient rail, docked top (below the HUD) or bottom
+       per the rail-dock setting. -->
+  <div id="prompter-rail" class="dock-top hidden"></div>
+
+  <!-- Phase C: the single cue-card region, near the eyeline in the right
+       margin, never over the text column at default margins. -->
+  <div id="cue-region"></div>
+
+  <!-- Phase C: pre-show GO LIVE control (producer sessions only). -->
+  <div id="golive-panel" class="hidden">
+    <button id="btn-golive">GO LIVE</button>
   </div>
 
   <header id="hud">
@@ -23,6 +46,9 @@
       <span id="role-badge" class="chip warn hidden">display only</span>
       <button id="btn-toggle">play</button>
       <button id="btn-restart">restart</button>
+      <span id="prod-badge" class="chip hidden">PRE</span>
+      <button id="btn-hold" class="hidden">hold</button>
+      <button id="btn-end" class="hidden">end</button>
     </div>
     <div class="hud-group">
       <span class="clock"><span id="clock-elapsed">00:00</span> <span class="dim">/</span> <span id="clock-remaining">--:--</span></span>
@@ -140,6 +166,16 @@
       <input type="checkbox" id="set-follow">
     </div>
 
+    <hr class="sep hidden" id="prod-sep">
+    <h2 id="prod-h" class="hidden">Producer</h2>
+    <div class="row hidden" id="row-rail-dock">
+      <label for="set-rail-dock">Rail position</label>
+      <select id="set-rail-dock">
+        <option value="top">top</option>
+        <option value="bottom">bottom</option>
+      </select>
+    </div>
+
     <hr class="sep">
     <h2>Script markers</h2>
     <div class="row">
@@ -169,6 +205,9 @@
           <tr><td><span class="kbd">s</span></td><td>section list</td></tr>
           <tr><td><span class="kbd">d</span></td><td>settings drawer</td></tr>
           <tr><td><span class="kbd">v</span></td><td>toggle voice follow (this machine only)</td></tr>
+          <tr><td><span class="kbd">g</span></td><td>GO LIVE (producer mode, pre-show)</td></tr>
+          <tr><td><span class="kbd">h</span></td><td>hold / resume the show clock (producer mode)</td></tr>
+          <tr><td><span class="kbd">n</span> / <span class="kbd">p</span></td><td>next / previous rundown segment (producer mode)</td></tr>
           <tr><td><span class="kbd">mouse wheel</span></td><td>speed up / down 2 wpm</td></tr>
           <tr><td><span class="kbd">click a word</span></td><td>jump the eyeline to that word (re-anchors in voice follow)</td></tr>
           <tr><td><span class="kbd">?</span></td><td>this help</td></tr>
@@ -227,6 +266,7 @@
   <script src="/static/js/model.js"></script>
   <script src="/static/js/audio.js"></script>
   <script src="/static/js/scroll.js"></script>
+  <script src="/static/js/rail.js"></script>
   <script src="/static/js/prompt.js"></script>
 </body>
 </html>

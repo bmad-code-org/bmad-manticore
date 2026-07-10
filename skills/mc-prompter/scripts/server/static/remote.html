@@ -25,31 +25,63 @@
       <span><span id="conn" class="dot"></span> <span id="session" class="dim mono"></span></span>
     </header>
 
-    <div id="status">
-      <div class="stat"><span class="v" id="st-elapsed">00:00</span><span class="k">elapsed</span></div>
-      <div class="stat"><span class="v" id="st-remaining">--:--</span><span class="k">remaining</span></div>
-      <div class="stat"><span class="v" id="st-wpm">--</span><span class="k">wpm</span></div>
+    <!-- Tab bar: the producer tab appears only when a rundown session is
+         running (Phase C). -->
+    <nav id="tabs" class="hidden">
+      <button id="tab-transport" class="tab active">transport</button>
+      <button id="tab-producer" class="tab">producer</button>
+    </nav>
+
+    <div id="view-transport">
+      <div id="status">
+        <div class="stat"><span class="v" id="st-elapsed">00:00</span><span class="k">elapsed</span></div>
+        <div class="stat"><span class="v" id="st-remaining">--:--</span><span class="k">remaining</span></div>
+        <div class="stat"><span class="v" id="st-wpm">--</span><span class="k">wpm</span></div>
+      </div>
+
+      <div id="posbar"><div class="fill" id="pos-fill"></div></div>
+
+      <div id="controls">
+        <button id="btn-toggle" class="big span2">play</button>
+        <button id="btn-slower" class="big">&minus;2 wpm</button>
+        <button id="btn-faster" class="big">+2 wpm</button>
+        <button id="btn-prev" class="big">&#8592; section</button>
+        <button id="btn-next" class="big">section &#8594;</button>
+        <button id="btn-restart" class="span2">restart from top</button>
+      </div>
+
+      <div id="section-panel" class="panel">
+        <h2>Sections <span id="sec-count" class="dim"></span></h2>
+        <ul id="section-list"></ul>
+      </div>
     </div>
 
-    <div id="posbar"><div class="fill" id="pos-fill"></div></div>
+    <!-- Phase C: producer controls. GO LIVE / hold / end, the live rail
+         summary, and the per-segment point list with covered / skip /
+         make-current taps (the human overrides the model with one tap). -->
+    <div id="view-producer" class="hidden">
+      <div id="prod-controls">
+        <button id="btn-golive" class="big span2">GO LIVE</button>
+        <button id="btn-hold" class="big" disabled>hold</button>
+        <button id="btn-end" class="big" disabled>end show</button>
+      </div>
 
-    <div id="controls">
-      <button id="btn-toggle" class="big span2">play</button>
-      <button id="btn-slower" class="big">&minus;2 wpm</button>
-      <button id="btn-faster" class="big">+2 wpm</button>
-      <button id="btn-prev" class="big">&#8592; section</button>
-      <button id="btn-next" class="big">section &#8594;</button>
-      <button id="btn-restart" class="span2">restart from top</button>
-    </div>
+      <div id="prod-rail"></div>
 
-    <div id="section-panel" class="panel">
-      <h2>Sections <span id="sec-count" class="dim"></span></h2>
-      <ul id="section-list"></ul>
+      <div id="prod-segments" class="panel">
+        <h2>Rundown</h2>
+        <div id="prod-seg-list"></div>
+        <p class="note-small">
+          Tap done when a point was covered, skip to drop it from the plan,
+          or make current to jump the show to a segment.
+        </p>
+      </div>
     </div>
   </div>
 
   <script src="/static/js/ws.js"></script>
   <script src="/static/js/model.js"></script>
+  <script src="/static/js/rail.js"></script>
   <script src="/static/js/remote.js"></script>
 </body>
 </html>

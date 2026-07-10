@@ -38,6 +38,36 @@
         </ul>
       </div>
 
+      <div class="panel" style="margin-bottom:1rem" id="rundown-panel">
+        <h2>Rundown (producer mode) <span id="prod-active-chip" class="chip good hidden">active</span></h2>
+        <div class="path-row">
+          <input type="text" id="rundown-path" placeholder="/absolute/path/to/rundown.md" spellcheck="false">
+          <button id="btn-rundown-load">load</button>
+        </div>
+        <p class="note-small" id="rundown-hint">
+          A rundown gives the show a duration, segment budgets, and talking
+          points; the producer rail and cues run against it. Load one here or
+          launch with --rundown.
+        </p>
+        <div id="rundown-msg"></div>
+        <div id="rundown-plan" class="hidden">
+          <ul class="info-list" style="margin-top:0.8rem">
+            <li><span class="k">show</span><span class="v" id="rd-show">-</span></li>
+            <li><span class="k">duration</span><span class="v" id="rd-duration">-</span></li>
+            <li><span class="k">cue density</span><span class="v" id="rd-density">-</span></li>
+            <li><span class="k">wrap reserve</span><span class="v" id="rd-wrap">-</span></li>
+            <li><span class="k">producer LLM</span><span class="v" id="rd-llm">-</span></li>
+          </ul>
+          <ul id="rundown-warnings" class="warn-list"></ul>
+          <table id="rundown-segs">
+            <thead>
+              <tr><th>segment</th><th>kind</th><th>planned</th></tr>
+            </thead>
+            <tbody id="rundown-segs-body"></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="panel" style="margin-bottom:1rem">
         <h2>Open</h2>
         <div class="launch-links">
@@ -88,6 +118,7 @@
 
   <script src="/static/js/ws.js"></script>
   <script src="/static/js/model.js"></script>
+  <script src="/static/js/rail.js"></script>
   <script src="/static/js/home.js"></script>
 </body>
 </html>
