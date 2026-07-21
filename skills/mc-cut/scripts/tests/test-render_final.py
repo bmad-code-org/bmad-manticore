@@ -4,12 +4,14 @@
 # ///
 """Tests for render_final.py and the shared composite_core.py: pure logic
 (timecode parsing, beat-table parsing, overlay resolution, chunk planning,
-encoder selection, disk estimation, progress parsing) plus CLI exit codes,
-and one end-to-end render over fixtures synthesized with ffmpeg color/test
-sources (skipped when ffmpeg is not installed). No model downloads, no real
-footage."""
+encoder selection with the per-OS hardware ladders and injected probes,
+loudnorm spec/stats parsing, disk estimation, progress parsing) plus CLI
+exit codes, and end-to-end renders over fixtures synthesized with ffmpeg
+color/test sources including a real two-pass loudnorm run (skipped when
+ffmpeg is not installed). No model downloads, no real footage."""
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -142,6 +144,10 @@ class TestPlanChunks(unittest.TestCase):
             self.assertAlmostEqual(a["offset"] + a["duration"], b["offset"])
 
 
+def never_probe(encoder):
+    raise AssertionError(f"probe must not be called (got {encoder!r})")
+
+
 class TestEncoderSelection(unittest.TestCase):
     def test_auto_prefers_videotoolbox_on_macos(self):
         avail = {"libx264", "h264_videotoolbox"}
@@ -151,11 +157,67 @@ class TestEncoderSelection(unittest.TestCase):
         self.assertEqual(core.pick_encoder("auto", {"libx264"}, "Darwin"),
                          "libx264")
 
+    def test_darwin_never_probes(self):
+        avail = {"libx264", "h264_videotoolbox"}
+        self.assertEqual(core.pick_encoder("auto", avail, "Darwin",
+                                           probe=never_probe),
+                         "h264_videotoolbox")
+        self.assertEqual(core.pick_encoder("auto", {"libx264"}, "Darwin",
+                                           probe=never_probe), "libx264")
+
     def test_explicit_falls_back_when_unavailable(self):
         self.assertEqual(core.pick_encoder("hevc_videotoolbox", {"libx264"},
                                            "Darwin"), "libx264")
         self.assertEqual(core.pick_encoder("libx264", {"libx264"}, "Linux"),
                          "libx264")
+
+    def test_explicit_request_never_probes(self):
+        avail = {"libx264", "h264_nvenc"}
+        self.assertEqual(core.pick_encoder("h264_nvenc", avail, "Windows",
+                                           probe=never_probe), "h264_nvenc")
+
+    def test_windows_ladder_order(self):
+        avail = {"libx264", "h264_nvenc", "h264_qsv", "h264_amf"}
+        self.assertEqual(core.pick_encoder("auto", avail, "Windows",
+                                           probe=lambda e: True),
+                         "h264_nvenc")
+        self.assertEqual(core.pick_encoder("auto", avail, "Windows",
+                                           probe=lambda e: e != "h264_nvenc"),
+                         "h264_qsv")
+        self.assertEqual(core.pick_encoder(
+            "auto", avail, "Windows",
+            probe=lambda e: e == "h264_amf"), "h264_amf")
+        self.assertEqual(core.pick_encoder("auto", avail, "Windows",
+                                           probe=lambda e: False), "libx264")
+
+    def test_linux_ladder_order(self):
+        avail = {"libx264", "h264_nvenc", "h264_vaapi"}
+        self.assertEqual(core.pick_encoder("auto", avail, "Linux",
+                                           probe=lambda e: True),
+                         "h264_nvenc")
+        self.assertEqual(core.pick_encoder("auto", avail, "Linux",
+                                           probe=lambda e: e == "h264_vaapi"),
+                         "h264_vaapi")
+        self.assertEqual(core.pick_encoder("auto", avail, "Linux",
+                                           probe=lambda e: False), "libx264")
+
+    def test_ladder_skips_unlisted_encoders_without_probing(self):
+        # amf is not in this build's encoder list, so it must not be probed;
+        # nvenc/qsv are listed but their probes fail -> libx264.
+        avail = {"libx264", "h264_nvenc", "h264_qsv"}
+        probed = []
+
+        def probe(e):
+            probed.append(e)
+            return False
+
+        self.assertEqual(core.pick_encoder("auto", avail, "Windows",
+                                           probe=probe), "libx264")
+        self.assertEqual(probed, ["h264_nvenc", "h264_qsv"])
+
+    def test_unknown_system_falls_back(self):
+        self.assertEqual(core.pick_encoder("auto", {"libx264"}, "Haiku",
+                                           probe=never_probe), "libx264")
 
     def test_encode_args(self):
         x264 = core.encode_args("libx264", crf=20, height=1080)
@@ -170,10 +232,104 @@ class TestEncoderSelection(unittest.TestCase):
         self.assertIn("hvc1", hevc)
         self.assertIn("40000k", hevc)
 
+    def test_encode_args_hardware_ladder_encoders(self):
+        for enc in ("h264_nvenc", "h264_qsv", "h264_amf"):
+            args = core.encode_args(enc, crf=20, height=1080)
+            self.assertIn("-b:v", args)
+            self.assertIn("12000k", args)
+            self.assertNotIn("-crf", args)
+            self.assertNotIn("-allow_sw", args)
+            # format negotiation is left to ffmpeg for these encoders
+            self.assertNotIn("-pix_fmt", args)
+        vaapi = core.encode_args("h264_vaapi", height=720)
+        self.assertIn("8000k", vaapi)
+        self.assertNotIn("-crf", vaapi)
+        self.assertNotIn("-pix_fmt", vaapi)  # hardware frames via hwupload
+
     def test_bitrate_ladder(self):
         self.assertEqual(core.bitrate_for(720), 8000)
         self.assertEqual(core.bitrate_for(540), 5000)
         self.assertEqual(core.bitrate_for(1440), 24000)
+
+
+class TestEncoderProbe(unittest.TestCase):
+    def test_probe_command_shape(self):
+        cmd = core.encoder_probe_command("h264_nvenc")
+        self.assertEqual(cmd[0], "ffmpeg")
+        self.assertIn("lavfi", cmd)
+        self.assertEqual(cmd[cmd.index("-frames:v") + 1], "1")
+        self.assertEqual(cmd[cmd.index("-c:v") + 1], "h264_nvenc")
+        self.assertEqual(cmd[-3:], ["-f", "null", "-"])
+        self.assertNotIn("-init_hw_device", cmd)
+        self.assertNotIn("hwupload", " ".join(cmd))
+
+    def test_probe_command_vaapi_gets_device_and_hwupload(self):
+        cmd = core.encoder_probe_command("h264_vaapi")
+        self.assertIn("-init_hw_device", cmd)
+        self.assertIn("vaapi=va", cmd)
+        self.assertIn("-filter_hw_device", cmd)
+        self.assertIn("format=nv12,hwupload", cmd)
+
+    def test_probe_cache_short_circuits(self):
+        # A cached verdict is returned without running anything (a probe of
+        # this fake encoder name would otherwise fail or invoke ffmpeg).
+        self.assertTrue(core.probe_encoder("fake_enc", cache={"fake_enc": True}))
+        self.assertFalse(core.probe_encoder("fake_enc", cache={"fake_enc": False}))
+
+    def test_probe_records_result_once(self):
+        cache = {}
+        first = core.probe_encoder("this_encoder_does_not_exist", cache=cache)
+        self.assertFalse(first)
+        self.assertEqual(cache, {"this_encoder_does_not_exist": False})
+        # poison the cache: a second call must not re-run the probe
+        cache["this_encoder_does_not_exist"] = True
+        self.assertTrue(core.probe_encoder("this_encoder_does_not_exist",
+                                           cache=cache))
+
+    @unittest.skipUnless(FFMPEG, "ffmpeg/ffprobe not installed")
+    def test_real_probe_passes_for_libx264(self):
+        self.assertTrue(core.probe_encoder("libx264", cache={}))
+
+
+class TestVaapiWiring(unittest.TestCase):
+    """The vaapi encode path: device init flags on the command and the
+    hwupload tail on the filtergraph, absent for every other encoder."""
+
+    def test_init_flags(self):
+        self.assertEqual(core.encoder_init_flags("h264_vaapi"),
+                         ["-init_hw_device", "vaapi=va",
+                          "-filter_hw_device", "va"])
+        for enc in ("libx264", "h264_videotoolbox", "h264_nvenc", None):
+            self.assertEqual(core.encoder_init_flags(enc), [])
+
+    def test_build_command_vaapi(self):
+        edl = edl_4x10()
+        cmd, _ = core.build_command(edl, Path("/proj"), "out.mp4", 1080,
+                                    encoder="h264_vaapi")
+        self.assertEqual(cmd[1:6], ["-y", "-init_hw_device", "vaapi=va",
+                                    "-filter_hw_device", "va"])
+        fc = cmd[cmd.index("-filter_complex") + 1]
+        self.assertIn("format=nv12,hwupload[outv]", fc)
+        self.assertNotIn("format=yuv420p[outv]", fc)
+
+    def test_build_command_software_unchanged(self):
+        edl = edl_4x10()
+        cmd, _ = core.build_command(edl, Path("/proj"), "out.mp4", 1080,
+                                    encoder="libx264")
+        self.assertNotIn("-init_hw_device", cmd)
+        fc = cmd[cmd.index("-filter_complex") + 1]
+        self.assertNotIn("hwupload", fc)
+        # default (no encoder given) is also unchanged
+        cmd2, _ = core.build_command(edl, Path("/proj"), "out.mp4", 1080)
+        self.assertNotIn("-init_hw_device", cmd2)
+
+    def test_filter_complex_hwupload_with_overlays(self):
+        edl = edl_4x10()
+        ovs = [{"index": 1, "start": 5.0, "dur": 2.0, "image": True}]
+        fc = core.build_filter_complex(edl, {"raw/a.mp4": 0}, 1080, ovs,
+                                       (100, 50), hwupload=True)
+        self.assertIn("format=nv12,hwupload[outv]", fc)
+        self.assertNotIn("format=yuv420p[outv]", fc)
 
 
 class TestDiskPreflight(unittest.TestCase):
@@ -208,6 +364,57 @@ class TestParseProgress(unittest.TestCase):
         self.assertEqual(core.parse_progress("out_time_us=N/A"), {})
 
 
+LOUDNORM_STDERR = """\
+[Parsed_loudnorm_0 @ 0x600002bb0000]
+{
+\t"input_i" : "-27.61",
+\t"input_tp" : "-14.46",
+\t"input_lra" : "0.00",
+\t"input_thresh" : "-37.61",
+\t"output_i" : "-14.01",
+\t"output_tp" : "-1.52",
+\t"output_lra" : "0.00",
+\t"output_thresh" : "-24.03",
+\t"normalization_type" : "linear",
+\t"target_offset" : "0.01"
+}
+"""
+
+
+class TestLoudnormHelpers(unittest.TestCase):
+    def test_parse_stats_block(self):
+        stats = render_final.parse_loudnorm_json(
+            "noise before\n" + LOUDNORM_STDERR)
+        self.assertEqual(stats["input_i"], -27.61)
+        self.assertEqual(stats["output_i"], -14.01)
+        self.assertEqual(stats["target_offset"], 0.01)
+        self.assertEqual(stats["normalization_type"], "linear")
+
+    def test_parse_inf_and_garbage(self):
+        stats = render_final.parse_loudnorm_json(
+            '{\n"input_i" : "-inf",\n"input_tp" : "-inf"\n}')
+        self.assertEqual(stats["input_i"], float("-inf"))
+        self.assertIsNone(render_final.parse_loudnorm_json("no json here"))
+        self.assertIsNone(render_final.parse_loudnorm_json("{ broken"))
+
+    def test_spec_measurement_form(self):
+        spec = render_final.loudnorm_spec(-14.0)
+        self.assertIn("loudnorm=I=-14:TP=-1.5:LRA=11", spec)
+        self.assertIn("print_format=json", spec)
+        self.assertNotIn("measured_I", spec)
+
+    def test_spec_application_form(self):
+        measured = {"input_i": -27.61, "input_tp": -14.46, "input_lra": 0.0,
+                    "input_thresh": -37.61, "target_offset": 0.01}
+        spec = render_final.loudnorm_spec(-14.0, measured)
+        self.assertIn("measured_I=-27.61", spec)
+        self.assertIn("measured_TP=-14.46", spec)
+        self.assertIn("measured_LRA=0.00", spec)
+        self.assertIn("measured_thresh=-37.61", spec)
+        self.assertIn("offset=0.01", spec)
+        self.assertIn("linear=true", spec)
+
+
 def run_cli(args):
     return subprocess.run([sys.executable, str(SCRIPTS / "render_final.py"),
                            *args], capture_output=True, text=True)
@@ -233,6 +440,26 @@ class TestCli(unittest.TestCase):
             r = run_cli([str(edl), "-o", str(Path(tmp) / "f.mp4"),
                          "--beats", "beats.md"])
             self.assertEqual(r.returncode, 2)
+
+    def test_non_ascii_edl_reads_under_non_utf8_locale(self):
+        # A UTF-8 edl.json whose quote text is Czech must parse under an
+        # ASCII locale codec (the Windows cp1252 failure class, simulated
+        # with LC_ALL=C and UTF-8 mode off) and reach the normal
+        # empty-segments error, never a UnicodeDecodeError.
+        with tempfile.TemporaryDirectory() as tmp:
+            edl = Path(tmp) / "edl.json"
+            edl.write_text('{"source":"x","quote":"Čau, uh, světe",'
+                           '"segments":[]}', encoding="utf-8")
+            env = dict(os.environ, LC_ALL="C", LANG="C",
+                       PYTHONCOERCECLOCALE="0")
+            r = subprocess.run(
+                [sys.executable, "-X", "utf8=0",
+                 str(SCRIPTS / "render_final.py"),
+                 str(edl), "-o", str(Path(tmp) / "f.mp4")],
+                capture_output=True, text=True, env=env)
+            self.assertNotIn("UnicodeDecodeError", r.stderr)
+            self.assertEqual(r.returncode, 2, r.stderr)
+            self.assertIn("no segments", r.stderr)
 
 
 @unittest.skipUnless(FFMPEG, "ffmpeg/ffprobe not installed")
@@ -299,20 +526,103 @@ class TestEndToEnd(unittest.TestCase):
         self.assertAlmostEqual(summary["actual_duration_seconds"], 2.0,
                                delta=0.5)
         self.assertEqual(summary["boundary_frames"], 2)
+        # loudnorm ran by default, post-concat, against the default target
+        self.assertEqual(summary["loudnorm"]["target"], -14.0)
+        self.assertTrue(summary["loudnorm"]["applied"])
         # progress lines reached stderr
         self.assertIn("render_final:", r.stderr)
-        # chunk intermediates were cleaned up
+        # chunk intermediates and loudnorm temp were cleaned up
         self.assertEqual(list((self.proj / "renders").glob("*.ts")), [])
+        self.assertEqual(list((self.proj / "renders").glob(".*loudnorm*")), [])
 
     def test_single_chunk_plain_render(self):
         out = self.proj / "renders" / "plain.mp4"
         r = run_cli([str(self.proj / "cut" / "edl.json"), "-o", str(out),
-                     "--codec", "libx264", "--crf", "30", "--parallel", "1"])
+                     "--codec", "libx264", "--crf", "30", "--parallel", "1",
+                     "--no-loudnorm"])
         self.assertEqual(r.returncode, 0, r.stderr)
         summary = json.loads(r.stdout)
         self.assertEqual(summary["chunks"], 1)
         self.assertEqual(summary["overlays"], 0)
+        self.assertIsNone(summary["loudnorm"])  # explicit opt-out
         self.assertTrue(out.is_file())
+
+
+@unittest.skipUnless(FFMPEG, "ffmpeg/ffprobe not installed")
+class TestLoudnormEndToEnd(unittest.TestCase):
+    """A real two-pass loudnorm run: a quiet 7s test tone rendered with the
+    default -14 LUFS target must measure within about 1 LU of it (measured
+    independently with a fresh loudnorm analysis pass)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        proj = Path(cls.tmp.name)
+        (proj / "raw").mkdir()
+        (proj / "cut").mkdir()
+        # 8s tone at 0.1 amplitude (~-26 LUFS): far from target, headroom
+        # for the linear gain to land on -14 without hitting the -1.5 TP cap.
+        r = subprocess.run(
+            ["ffmpeg", "-y",
+             "-f", "lavfi", "-t", "8", "-i", "testsrc2=size=320x180:rate=30",
+             "-f", "lavfi", "-t", "8", "-i",
+             "sine=frequency=440:sample_rate=48000",
+             "-t", "8", "-shortest", "-af", "volume=0.1",
+             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
+             "-pix_fmt", "yuv420p", "-c:a", "aac",
+             str(proj / "raw" / "tone.mp4")],
+            capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+        edl = {"source": "raw/tone.mp4", "fade_ms": 30, "pad_ms": 60,
+               "segments": [
+                   {"source": "raw/tone.mp4", "start": 0.5, "end": 7.5}]}
+        (proj / "cut" / "edl.json").write_text(json.dumps(edl))
+        cls.proj = proj
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def measure(self, path):
+        """Independent loudness measurement of a finished file."""
+        proc = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-nostats", "-i", str(path), "-vn",
+             "-af", "loudnorm=print_format=json", "-f", "null", "-"],
+            capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        stats = render_final.parse_loudnorm_json(proc.stderr)
+        self.assertIsNotNone(stats)
+        return stats
+
+    def test_output_lands_within_one_lu_of_target(self):
+        out = self.proj / "renders" / "final.mp4"
+        r = run_cli([str(self.proj / "cut" / "edl.json"), "-o", str(out),
+                     "--codec", "libx264", "--crf", "30", "--parallel", "1"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        summary = json.loads(r.stdout)
+        ln = summary["loudnorm"]
+        self.assertEqual(ln["target"], -14.0)
+        self.assertTrue(ln["applied"])
+        self.assertLess(ln["input_i"], -20.0)  # the tone really was quiet
+        # the script's own report is close to target...
+        self.assertAlmostEqual(ln["output_i"], -14.0, delta=1.0)
+        # ...and so is an independent measurement of the file on disk
+        measured = self.measure(out)
+        self.assertAlmostEqual(measured["input_i"], -14.0, delta=1.0)
+        # duration survived the audio re-encode
+        self.assertAlmostEqual(summary["actual_duration_seconds"], 7.0,
+                               delta=0.5)
+
+    def test_custom_target(self):
+        out = self.proj / "renders" / "quiet.mp4"
+        r = run_cli([str(self.proj / "cut" / "edl.json"), "-o", str(out),
+                     "--codec", "libx264", "--crf", "30", "--parallel", "1",
+                     "--loudness-target", "-19"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        summary = json.loads(r.stdout)
+        self.assertEqual(summary["loudnorm"]["target"], -19.0)
+        measured = self.measure(out)
+        self.assertAlmostEqual(measured["input_i"], -19.0, delta=1.0)
 
 
 if __name__ == "__main__":

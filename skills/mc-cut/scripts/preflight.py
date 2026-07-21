@@ -106,16 +106,25 @@ def estimate_master_bytes(duration, height, source_bytes):
 
 def remux_command(src, dst, rate, encoder="libx264", crf=18, height=None):
     """ffmpeg argv re-encoding src to CFR at `rate` (audio copied).
-    videotoolbox encoders have no CRF mode, so they take the master bitrate
-    for the source height; libx264 takes -crf."""
-    argv = ["ffmpeg", "-y", "-i", str(src), "-vf", f"fps={rate}"]
-    if encoder.endswith("_videotoolbox"):
-        argv += ["-c:v", encoder, "-b:v",
-                 f"{master_bitrate_for(height)}k", "-allow_sw", "1"]
+    Hardware encoders have no dependable CRF mode, so they take the master
+    bitrate for the source height (videotoolbox additionally -allow_sw;
+    vaapi additionally device init and an hwupload chain, and no forced
+    -pix_fmt since the encoder receives hardware frames); libx264 takes
+    -crf."""
+    argv = ["ffmpeg", "-y", *core.encoder_init_flags(encoder), "-i", str(src)]
+    vf = f"fps={rate}"
+    if core.encoder_needs_hwupload(encoder):
+        vf += ",format=nv12,hwupload"
+    argv += ["-vf", vf]
+    if core.is_hardware_encoder(encoder):
+        argv += ["-c:v", encoder, "-b:v", f"{master_bitrate_for(height)}k"]
+        if encoder.endswith("_videotoolbox"):
+            argv += ["-allow_sw", "1"]
     else:
         argv += ["-c:v", encoder, "-crf", str(crf), "-preset", "fast"]
-    argv += ["-pix_fmt", "yuv420p", "-c:a", "copy",
-             "-movflags", "+faststart", str(dst)]
+    if not core.encoder_needs_hwupload(encoder):
+        argv += ["-pix_fmt", "yuv420p"]
+    argv += ["-c:a", "copy", "-movflags", "+faststart", str(dst)]
     return argv
 
 
@@ -237,10 +246,12 @@ def main(argv=None):
         print(json.dumps(build_summary(files, disk), indent=2))
         return 1
 
+    # One encoder pick for every remux in this run (pick_encoder's hardware
+    # probes are cached per process, but there is no reason to ask twice).
+    encoder = core.pick_encoder("auto") if remux_jobs else None
     for entry, path, info in remux_jobs:
         rate = nearest_standard_rate(info["avg_frame_rate"])
         dst = path.with_name(path.stem + args.remux_suffix + ".mp4")
-        encoder = core.pick_encoder("auto")
         cmd = remux_command(path, dst, rate, encoder, height=info["height"])
         print(f"preflight: remuxing VFR {path.name} to CFR {rate} "
               f"({encoder})...", file=sys.stderr)

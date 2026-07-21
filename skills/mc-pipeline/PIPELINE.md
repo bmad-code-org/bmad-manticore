@@ -24,8 +24,8 @@ Format profiles select a subset of these stages (see the `stages:` frontmatter o
 | 7 | beats | mc-beats | gate 3: beats | `beats/beats.md` (the beat table), `beats/STORYBOARD.md` |
 | 8 | graphics | mc-graphics | | `graphics/` alpha MOVs + `graphics/HANDOFF.md`; on completion the router routes through mc-cut to re-render `renders/preview.mp4` with the overlays composited |
 | 9 | assets | mc-assets | | `assets/` + `assets/manifest.json` |
-| 10 | package | mc-package | | `packaging/titles.md`, `packaging/thumbs/`, `packaging/description.md`, `packaging/chapters.md` |
-| 11 | final | the creator, with an offered pipeline render | gate 4: final | `renders/final.mp4` (the offered final-quality render: same EDL, graphics composited from the beat table, delivery resolution and codec per `[render]`), or the creator's own editor render into `renders/` |
+| 10 | package | mc-package | | `packaging/titles.md`, `packaging/thumbs/`, `packaging/description.md`, `packaging/chapters.md`, `packaging/captions/` (final.srt, final.vtt, transcript.md, when the cut exists) |
+| 11 | final | the creator, with an offered pipeline render | gate 4: final | `renders/final.mp4` (the offered final-quality render: same EDL, graphics composited from the beat table, delivery resolution and codec per `[render]`, loudness-normalized to the `[render]` loudness-target unless loudnorm is off), or the creator's own editor render into `renders/` |
 | 12 | retro | mc-retro | | edits to `{formats-path}/<format>.md` learnings + offending skill files |
 
 Stages 8 and 9 may run in parallel once gate 3 is approved. Stage 10 may start any time after gate 1 (the packaging promise exists from the outline).

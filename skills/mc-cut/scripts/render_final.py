@@ -9,6 +9,7 @@ Usage:
     uv run {skill-root}/scripts/render_final.py <edl.json> -o renders/final.mp4 \
         [--project-dir <dir>] [--beats beats/beats.md --graphics-dir graphics/] \
         [--codec auto] [--crf 18] [--height <H>] [--parallel 2] \
+        [--loudness-target -14] [--no-loudnorm] \
         [--boundary-frames <dir>] [--skip-disk-check] [--keep-temp]
 
 Purpose:
@@ -33,13 +34,29 @@ Contract:
              losslessly concatenated (concat demuxer, -c copy,
              aac_adtstoasc, +faststart). Intermediates are removed unless
              --keep-temp.
-    encode   --codec auto picks h264_videotoolbox on macOS when this ffmpeg
-             lists it (hardware; bitrate ladder by output height), libx264
-             -crf --crf (default 18, preset medium) otherwise; an explicit
-             --codec not offered by ffmpeg falls back to libx264.
-             hevc_videotoolbox gets -tag:v hvc1. Audio aac 192k, video
-             yuv420p. --height scales (aspect kept, even width); default
-             keeps the source resolution.
+    encode   --codec auto picks the platform's hardware ladder: on macOS
+             h264_videotoolbox when this ffmpeg lists it (bitrate ladder by
+             output height); on Windows the first of h264_nvenc, h264_qsv,
+             h264_amf that is listed AND passes a one-frame test encode
+             (lavfi color source to the null muxer, probed once per run); on
+             Linux h264_nvenc then h264_vaapi the same way (vaapi gets
+             device init and an hwupload filtergraph tail). libx264 -crf
+             --crf (default 18, preset medium) is the fallback everywhere;
+             an explicit --codec not offered by ffmpeg falls back to
+             libx264. hevc_videotoolbox gets -tag:v hvc1. Audio aac 192k.
+             --height scales (aspect kept, even width); default keeps the
+             source resolution.
+    loudnorm two-pass ffmpeg loudnorm on the finished file, final render
+             only (the fast preview never normalizes): pass 1 measures
+             (loudnorm print_format=json over the whole timeline, which is
+             why it runs after chunk concat, never per chunk), pass 2
+             re-encodes the audio with the measured values (linear mode,
+             TP -1.5, LRA 11, aac 192k 48kHz) while the video stream is
+             copied, then atomically replaces the output. Target is
+             --loudness-target in LUFS (default -14, the YouTube reference);
+             --no-loudnorm skips both passes. Silent/unmeasurable audio
+             (non-finite measurements) skips pass 2 with a warning instead
+             of failing.
     safety   disk preflight before any render: estimated output bytes (from
              the bitrate ladder) times 2 must fit on the output volume, else
              the render refuses with a clear message (--skip-disk-check
@@ -50,7 +67,9 @@ Contract:
              0.5s, and --boundary-frames extracts before/after stills at
              every internal cut for the boundary-frame inspection.
     summary  json.dumps on stdout: segments, chunks, encoder, overlays,
-             overlays_missing, expected/actual duration, output path.
+             overlays_missing, expected/actual duration, loudnorm (null when
+             --no-loudnorm; else {target, applied, input_i, output_i,
+             output_tp}), output path.
 
 Exit codes: 0 ok, 1 failure, 2 usage.
 
@@ -60,6 +79,7 @@ by the synthesized-fixture integration test there).
 
 import argparse
 import json
+import math
 import subprocess
 import sys
 import threading
@@ -69,6 +89,119 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import composite_core as core
+
+# loudnorm companions to the integrated target: true peak ceiling and
+# loudness range, the common VOD-delivery pairing for a -14 LUFS target.
+LOUDNORM_TP = -1.5
+LOUDNORM_LRA = 11.0
+
+# The measurement keys pass 2 feeds back to loudnorm; all must be finite.
+MEASURED_KEYS = ("input_i", "input_tp", "input_lra", "input_thresh",
+                 "target_offset")
+
+
+def parse_loudnorm_json(stderr_text):
+    """Extract the JSON stats block loudnorm prints at the end of stderr.
+    Numeric-looking values (including '-inf') become floats. Returns None
+    when no parseable block is present."""
+    start = stderr_text.rfind("{")
+    if start == -1:
+        return None
+    end = stderr_text.find("}", start)
+    if end == -1:
+        return None
+    try:
+        raw = json.loads(stderr_text[start:end + 1])
+    except json.JSONDecodeError:
+        return None
+    stats = {}
+    for k, v in raw.items():
+        try:
+            stats[k] = float(v)
+        except (TypeError, ValueError):
+            stats[k] = v
+    return stats
+
+
+def loudnorm_spec(target, measured=None):
+    """The loudnorm filter spec: measurement form (pass 1) without
+    `measured`, application form (pass 2, linear) with it."""
+    spec = f"loudnorm=I={target:g}:TP={LOUDNORM_TP:g}:LRA={LOUDNORM_LRA:g}"
+    if measured is not None:
+        spec += (f":measured_I={measured['input_i']:.2f}"
+                 f":measured_TP={measured['input_tp']:.2f}"
+                 f":measured_LRA={measured['input_lra']:.2f}"
+                 f":measured_thresh={measured['input_thresh']:.2f}"
+                 f":offset={measured['target_offset']:.2f}"
+                 ":linear=true")
+    return spec + ":print_format=json"
+
+
+def measure_loudness(path, target):
+    """Loudnorm pass 1: decode the audio once, print the measurement JSON.
+    Returns the stats dict or None on failure (command echoed to stderr)."""
+    cmd = ["ffmpeg", "-hide_banner", "-nostats", "-i", str(path),
+           "-vn", "-af", loudnorm_spec(target), "-f", "null", "-"]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        print("loudnorm measurement failed:", file=sys.stderr)
+        print(" ".join(cmd), file=sys.stderr)
+        print(proc.stderr.strip()[-2000:], file=sys.stderr)
+        return None
+    stats = parse_loudnorm_json(proc.stderr)
+    if stats is None:
+        print("loudnorm measurement produced no stats block", file=sys.stderr)
+    return stats
+
+
+def apply_loudnorm(path, measured, target):
+    """Loudnorm pass 2: re-encode the audio with the measured values (video
+    copied) to a dotfile beside the output, then atomically replace it.
+    Returns the pass-2 stats dict (carries output_i/output_tp) or None on
+    failure; the original file is left untouched on failure."""
+    tmp = path.with_name(f".{path.stem}-loudnorm{path.suffix}")
+    cmd = ["ffmpeg", "-y", "-i", str(path), "-c:v", "copy",
+           "-af", loudnorm_spec(target, measured),
+           "-c:a", "aac", "-b:a", "192k", "-ar", "48000"]
+    if path.suffix.lower() in (".mp4", ".mov"):
+        cmd += ["-movflags", "+faststart"]
+    cmd.append(str(tmp))
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        print("loudnorm apply failed:", file=sys.stderr)
+        print(" ".join(cmd), file=sys.stderr)
+        print(proc.stderr.strip()[-2000:], file=sys.stderr)
+        tmp.unlink(missing_ok=True)
+        return None
+    stats = parse_loudnorm_json(proc.stderr) or {}
+    tmp.replace(path)
+    return stats
+
+
+def run_loudnorm(output, target):
+    """Both loudnorm passes over the finished render. Returns the summary
+    dict, or None on a hard failure (caller exits 1)."""
+    print(f"render_final: loudnorm pass 1 of 2 (measuring, target "
+          f"{target:g} LUFS)", file=sys.stderr)
+    measured = measure_loudness(output, target)
+    if measured is None:
+        return None
+    finite = all(isinstance(measured.get(k), float)
+                 and math.isfinite(measured[k]) for k in MEASURED_KEYS)
+    if not finite:
+        print("render_final: audio is silent or unmeasurable; skipping "
+              "loudness normalization", file=sys.stderr)
+        return {"target": target, "applied": False,
+                "input_i": measured.get("input_i"),
+                "output_i": None, "output_tp": None}
+    print("render_final: loudnorm pass 2 of 2 (applying)", file=sys.stderr)
+    stats = apply_loudnorm(output, measured, target)
+    if stats is None:
+        return None
+    return {"target": target, "applied": True,
+            "input_i": measured["input_i"],
+            "output_i": stats.get("output_i"),
+            "output_tp": stats.get("output_tp")}
 
 
 def run_chunks(cmds, durations, total):
@@ -127,7 +260,7 @@ def concat_chunks(chunk_files, output):
     for p in chunk_files:
         quoted = str(p.resolve()).replace("'", "'\\''")
         lines.append(f"file '{quoted}'\n")
-    list_file.write_text("".join(lines))
+    list_file.write_text("".join(lines), encoding="utf-8")
     cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(list_file),
            "-c", "copy", "-bsf:a", "aac_adtstoasc",
            "-movflags", "+faststart", str(output)]
@@ -160,6 +293,11 @@ def main(argv=None):
                         help="scale output to this height (default: source native)")
     parser.add_argument("--parallel", type=int, default=2,
                         help="max parallel render chunks (default 2)")
+    parser.add_argument("--loudness-target", type=float, default=-14.0,
+                        help="two-pass loudnorm integrated target in LUFS "
+                             "(default -14)")
+    parser.add_argument("--no-loudnorm", action="store_true",
+                        help="skip loudness normalization entirely")
     parser.add_argument("--boundary-frames", default=None,
                         help="dir to write per-cut boundary stills into")
     parser.add_argument("--skip-disk-check", action="store_true")
@@ -178,7 +316,7 @@ def main(argv=None):
         Path(args.project_dir).resolve() if args.project_dir
         else edl_path.parent.parent
     )
-    edl = json.loads(edl_path.read_text())
+    edl = json.loads(edl_path.read_text(encoding="utf-8"))
     if not edl.get("segments"):
         print("edl has no segments", file=sys.stderr)
         return 2
@@ -233,7 +371,8 @@ def main(argv=None):
     if len(chunks) == 1:
         cmd, _ = core.build_command(edl, project_dir, output, scale_height,
                                     overlays=overlays, overlay_size=overlay_size,
-                                    encode=enc, extra_output_flags=progress_flags)
+                                    encode=enc, extra_output_flags=progress_flags,
+                                    encoder=encoder)
         rcs, tails = run_chunks([cmd], [total], total)
         if rcs[0] != 0:
             print("ffmpeg render failed:", file=sys.stderr)
@@ -253,7 +392,8 @@ def main(argv=None):
                                         overlays=ch["overlays"],
                                         overlay_size=overlay_size,
                                         encode=enc,
-                                        extra_output_flags=progress_flags)
+                                        extra_output_flags=progress_flags,
+                                        encoder=encoder)
             cmds.append(cmd)
             files.append(f)
             durs.append(ch["duration"])
@@ -275,6 +415,12 @@ def main(argv=None):
         if not ok:
             return 1
 
+    loudnorm = None
+    if not args.no_loudnorm:
+        loudnorm = run_loudnorm(output, args.loudness_target)
+        if loudnorm is None:
+            return 1
+
     actual = core.probe_duration(output)
 
     boundary_count = 0
@@ -290,6 +436,7 @@ def main(argv=None):
         "overlays_missing": missing,
         "expected_duration_seconds": round(total, 3),
         "actual_duration_seconds": round(actual, 3) if actual is not None else None,
+        "loudnorm": loudnorm,
         "boundary_frames": boundary_count,
         "output": str(output.resolve()),
     }

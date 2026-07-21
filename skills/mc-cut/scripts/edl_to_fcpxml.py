@@ -75,7 +75,6 @@ import sys
 import xml.etree.ElementTree as ET
 from fractions import Fraction
 from pathlib import Path
-from urllib.parse import quote
 
 
 # --- rational / frame-grid helpers (pure, unit-tested) --------------------
@@ -190,6 +189,17 @@ def _fps_label(num, den):
     return str(num) if den == 1 else f"{round(num / den, 2)}"
 
 
+def media_rep_uri(abs_path):
+    """RFC 8089 file URI for an absolute media path, via Path.as_uri().
+
+    as_uri() is byte-identical to the previous 'file://' + quote(path)
+    construction for POSIX paths (same percent-encoding, same safe set), and
+    unlike it emits valid drive-letter URIs on Windows (file:///C:/...) and
+    UNC share URIs (file://server/share/...). Takes any absolute PurePath so
+    the Windows shape is unit-testable from any OS."""
+    return abs_path.as_uri()
+
+
 def _audio_rate_label(rate):
     if rate is None:
         return "48k"
@@ -302,7 +312,7 @@ def build_document(edl, sources, project_dir):
         asset = ET.SubElement(resources, "asset", attrs)
         ET.SubElement(asset, "media-rep", {
             "kind": "original-media",
-            "src": "file://" + quote(str(abs_path)),
+            "src": media_rep_uri(abs_path),
         })
 
     # --- library / event / project / sequence / spine ---
@@ -390,7 +400,7 @@ def main(argv=None):
     )
 
     # parse_float=Fraction keeps EDL times exact from the source decimal tokens.
-    edl = json.loads(edl_path.read_text(), parse_float=Fraction)
+    edl = json.loads(edl_path.read_text(encoding="utf-8"), parse_float=Fraction)
 
     distinct = []
     for seg in edl["segments"]:
@@ -410,7 +420,10 @@ def main(argv=None):
     root, meta = build_document(edl, sources, project_dir)
     text = serialize(root)
     out_path = Path(args.output)
-    out_path.write_text(text)
+    # utf-8 explicitly: the XML declaration says UTF-8, so the bytes must be
+    # UTF-8 regardless of the locale codec (Windows cp1252 would otherwise
+    # corrupt or reject non-ASCII clip names).
+    out_path.write_text(text, encoding="utf-8")
 
     # Round-trip validation: re-parse the file we just wrote (the parser skips
     # the XML declaration and the entity-free DOCTYPE) and check the spine.

@@ -8,6 +8,7 @@ tool (a python one-liner). No real generation, no network, no billing."""
 import importlib.util
 import json
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -109,6 +110,62 @@ class TestPlanInvocation(unittest.TestCase):
             mod.plan_invocation(self.tool(), "image", "p", "/out",
                                 ref="real.png")
         self.assertIn("mc-setup", str(ctx.exception))
+
+    def test_template_quoting_is_posix_on_every_os(self):
+        # Single quotes group a token and double quotes nest inside them,
+        # exactly as a POSIX shell would, regardless of the host OS.
+        t = self.tool(headless="grok -p '<prompt>' --caption 'say \"hi\"'")
+        argv = mod.plan_invocation(t, "image", "two words", "/out")
+        self.assertEqual(argv, ["grok", "-p", "two words",
+                                "--caption", 'say "hi"'])
+
+
+class TestResolveExecutable(unittest.TestCase):
+    def test_argv0_resolves_via_which(self):
+        resolved = mod.resolve_executable([sys.executable, "-c", "pass"])
+        self.assertEqual(resolved,
+                         [shutil.which(sys.executable), "-c", "pass"])
+
+    def test_unresolvable_argv0_returned_unchanged(self):
+        argv = ["definitely-not-a-real-tool-xyz", "-p", "x"]
+        self.assertEqual(mod.resolve_executable(argv), argv)
+
+    def test_empty_command_returned_unchanged(self):
+        self.assertEqual(mod.resolve_executable([]), [])
+
+
+class TestCmdShimSafety(unittest.TestCase):
+    # cmd.exe reparses .cmd/.bat argument lines with its own quoting and
+    # expands metacharacters; passing them through corrupts prompts
+    # (BatBadBut-class injection), so the guard must fail loudly instead.
+
+    def test_non_shim_commands_pass_through_unchanged(self):
+        argv = ["/usr/local/bin/grok", "-p", 'say "hi" & del %TEMP%']
+        self.assertEqual(mod.check_cmd_shim_safety(argv), argv)
+        exe = [r"C:\tools\grok.EXE", "-p", 'quote "this" exactly']
+        self.assertEqual(mod.check_cmd_shim_safety(exe), exe)
+
+    def test_shim_with_safe_arguments_passes_through(self):
+        argv = [r"C:\npm\grok.CMD", "-p", "a manticore at red sunset",
+                "--always-approve"]
+        self.assertEqual(mod.check_cmd_shim_safety(argv), argv)
+
+    def test_shim_with_embedded_double_quote_is_refused(self):
+        # generative rule 5 says to quote exact on-image text; through a
+        # .cmd shim that quote would reach the tool corrupted.
+        with self.assertRaises(ValueError) as ctx:
+            mod.check_cmd_shim_safety(
+                [r"C:\npm\grok.cmd", "-p", 'thumbnail text says "GO"'])
+        self.assertIn("mc-setup", str(ctx.exception))
+
+    def test_shim_with_cmd_metacharacters_is_refused(self):
+        for arg in ("%TEMP%", "a ^ b", "x & del y", "a | b", "a < b", "a > b",
+                    "line\nbreak"):
+            with self.assertRaises(ValueError):
+                mod.check_cmd_shim_safety([r"C:\npm\tool.bat", "-p", arg])
+
+    def test_empty_command_passes_through(self):
+        self.assertEqual(mod.check_cmd_shim_safety([]), [])
 
 
 class TestManifest(unittest.TestCase):

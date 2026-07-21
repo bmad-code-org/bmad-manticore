@@ -7,8 +7,10 @@
 The mc-audio entry point: resolves the requested kind to its engine payload,
 runs it inside the audio-lab workspace venv, and records provenance. Engine
 payloads live in engines/ next to this script and run as
-<workspace>/.venv/bin/python <payload> (torch-class deps live in that one
-persistent venv; ensure_workspace.py builds it).
+<venv-python> <payload>, where <venv-python> is the workspace venv's
+interpreter (.venv/bin/python on macOS and Linux, .venv\\Scripts\\python.exe
+on Windows; torch-class deps live in that one persistent venv;
+ensure_workspace.py builds it).
 
 Kinds and their arguments:
     tts      --text "..." [--voice af_heart] [--speed 1.0]
@@ -71,9 +73,19 @@ def die(msg: str, code: int = 2) -> None:
     sys.exit(code)
 
 
+def venv_python(workspace: Path) -> Path:
+    """Per-OS venv interpreter path (Windows uses Scripts\\python.exe).
+
+    Duplicated in ensure_workspace.py; keep the two in sync.
+    """
+    if os.name == "nt":
+        return workspace / ".venv" / "Scripts" / "python.exe"
+    return workspace / ".venv" / "bin" / "python"
+
+
 def build_command(args: argparse.Namespace, out_file: Path) -> list[str]:
     payload = Path(__file__).parent / "engines" / ENGINES[args.kind][1]
-    py = args.workspace / ".venv" / "bin" / "python"
+    py = venv_python(args.workspace)
     if args.kind in ("tts", "podcast"):
         cmd = [str(py), str(payload), "--models-dir",
                str(args.workspace / "models"), "--out", str(out_file)]
@@ -142,7 +154,7 @@ def main() -> None:
                           "HF_HOME": env["HF_HOME"], "model": model}, indent=2))
         return
 
-    py = args.workspace / ".venv" / "bin" / "python"
+    py = venv_python(args.workspace)
     if not py.exists():
         die(f"error: workspace not ready ({py} missing); run "
             "ensure_workspace.py first", 4)

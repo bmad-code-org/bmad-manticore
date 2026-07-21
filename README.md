@@ -2,7 +2,7 @@
 
 # BMad Manticore
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue)](.claude-plugin/marketplace.json)
+[![Version](https://img.shields.io/badge/version-1.0.1-blue)](.claude-plugin/marketplace.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python Version](https://img.shields.io/badge/python-%3E%3D3.11-blue?logo=python&logoColor=white)](https://www.python.org)
 [![uv](https://img.shields.io/badge/uv-package%20manager-blueviolet?logo=uv)](https://docs.astral.sh/uv/)
@@ -23,7 +23,7 @@ Manticore is an AI video production pipeline for content creators, packaged as a
 - A render at every step: a fast low-res preview after every cut approval, the same preview re-rendered with graphics composited once the graphics stage has rendered the overlays, and a final-quality render offered at the last gate. The editor timeline export, edl.json, cutplan, and overlays are always written too, so jumping into your editor never loses work.
 - Motion graphics planned under creativity mandates and your visual density tier, styled by your Production Bible, delivered as brand-themed alpha overlays (ProRes 4444, works in every NLE), anchored to the exact words you speak.
 - CTAs planned like beats: your configured CTA inventory placed at research-backed seams, approved by you in the same gate as every other graphic.
-- Titles, thumbnails (A/B pairs for series), description, and chapters, built around a packaging promise you approved before the script was written.
+- Titles, thumbnails (A/B pairs for series), description, chapters, and uploadable SRT/VTT captions with a publishable transcript of the edited timeline, built around a packaging promise you approved before the script was written.
 - A pipeline that gets smarter every video: your post-publish notes edit the pipeline's own files.
 
 ## How a video happens
@@ -71,10 +71,13 @@ Full walkthrough: [Configure your own Manticore studio](docs/user-guide.md).
 
 | Platform | Status |
 |---|---|
-| macOS on Apple Silicon | The reference platform. Everything runs, including the default transcription lane (parakeet-mlx, free and local). |
-| macOS on Intel, Linux, Windows | The pipeline scripts run (uv, ffmpeg, node), but the default transcription lane does not: parakeet-mlx is Apple-Silicon-only. mc-setup's dependency check flags this and points at local whisper.cpp or faster-whisper as fallbacks (they normalize fillers away, so cut quality drops). A supported cross-platform transcription lane is planned; see [TODO.md](TODO.md). |
+| macOS on Apple Silicon | The reference platform. Everything runs and is validated here, including the reference transcription lane (parakeet-mlx, free and local) and videotoolbox hardware encode. |
+| macOS on Intel | Code-complete: onnx-asr on CPU runs the same parakeet-tdt-0.6b-v3 weights as an ONNX conversion, so verbatim fillers and word timestamps carry over, and videotoolbox encode still applies. Like the Windows and Linux paths, this lane is reviewed and unit-tested but pending validation on real Intel Mac hardware; treat the first run as a shakedown. |
+| Windows, Linux | Code-complete. Transcription uses onnx-asr with the same parakeet weights (CPU by default, CUDA via a one-flag escalation); final-render hardware encode probes h264_nvenc, h264_qsv, h264_amf on Windows and h264_nvenc, h264_vaapi on Linux with a real one-frame test encode, libx264 fallback everywhere; the audio farm resolves its venv per OS and installs CUDA torch wheels from the PyTorch index on Windows NVIDIA boxes (with consent). Honest caveat: these paths are reviewed and unit-tested but still pending validation on real Windows and Linux hardware; treat the first run as a shakedown and report what you hit. |
 
-One tool-specific note: Ecamm Live (a planned stream-pack delivery target) is macOS-only. OBS lanes work everywhere OBS does.
+mc-setup's dependency check now detects OS, CPU architecture, and GPU vendor and selects a per-platform stack reference (macOS, Windows, Linux) that drives the setup defaults: transcription lane, torch wheel source, encoder ladder, SVG rasterizer, and fonts approach.
+
+One tool-specific note: Ecamm Live (a planned stream-pack delivery target) is macOS-only, and vMix and Wirecast skip Linux; OBS lanes work everywhere OBS does.
 
 ## Works with the tools you already have
 
@@ -83,7 +86,7 @@ Manticore orchestrates tools; it does not replace them. The defaults are local a
 | Tool | What it provides | Cost model |
 |---|---|---|
 | Your editor (DaVinci Resolve, Final Cut Pro, Premiere Pro, Descript, anything) | Where you can finish any time you want to. Resolve/FCP get an FCPXML timeline; Premiere users work from the cut plan, edl.json, and the rendered preview/final until the xmeml lane lands; `timeline-format = "none"` gives you the cut plan, edl.json, and renders to apply in any tool | You already have it |
-| parakeet-mlx | Word-level cutting transcripts with verbatim fillers (the "um"s are exactly what gets cut) | Free, runs locally on Apple Silicon, no API key |
+| parakeet-mlx / onnx-asr | Word-level cutting transcripts with verbatim fillers (the "um"s are exactly what gets cut); parakeet-mlx on Apple Silicon, onnx-asr running the same parakeet-tdt-0.6b-v3 weights on Windows, Linux, and Intel Mac | Free, runs locally, no API key |
 | Kokoro-82M (kokoro-onnx) | TTS narration and two-host dialogue for the mc-audio lane (stock voices, no cloning) | Free, local, faster than realtime on CPU |
 | MusicGen-small + AudioLDM2 | Instrumental music beds and SFX, farmed locally by mc-audio | Free, local, ungated models |
 | HyperFrames and Remotion | Motion graphics engines for overlay beats, stingers, and karaoke captions | Free (Remotion is free for companies up to 3 people) |
@@ -130,7 +133,7 @@ Seven ship by default: talking-head, screen-tutorial (real UI only, generated b-
 | mc-ograf | Editable broadcast graphics (DaVinci Resolve 21+ and OBS/SPX-GC) |
 | mc-assets | Farm b-roll stills/clips via your registered CLI tools (metered APIs opt-in), under generative-editing safety rules |
 | mc-audio | Farm sound, local-first: TTS narration and two-host dialogue (Kokoro-82M), instrumental beds (MusicGen-small), SFX (AudioLDM2); paid lanes opt-in |
-| mc-package | Titles, thumbnails (verified at 120px), description, chapters, series A/B pairs, live-event mode |
+| mc-package | Titles, thumbnails (verified at 120px), description, chapters, SRT/VTT captions and transcript, series A/B pairs, live-event mode |
 | mc-stream-pack | A complete branded OBS livestream asset pack |
 | mc-retro | Your post-publish notes edit the pipeline's own files, plus the post-publish wrap lane |
 
@@ -145,7 +148,7 @@ Taste lives in files (your voice bible, Production Bible, format profiles, brand
 - Proven in production: the full cut lane (parakeet-mlx word-level transcription validated on real footage, cut candidate detection, edl.json, FCPXML export, preview render with boundary-frame verification), Manny as the front door, setup and dependency checking, config resolution, project scaffolding, the OBS stream pack, and the retro loop.
 - New in 1.0, implemented and unit-tested, with the least real-project mileage: the render lane (composited preview and the offered final render), the expanded setup interview (render consent, video style, creator-emulation takeaways, headshots, guided voice bible), the Production Bible, creativity mandates and the CTA system, footage-first ingest and the livestream-vod format, series support, graphics render verification, the graphics toolkit (HTML render, snug framing, design-prompting lane), CLI-registry asset farming, and the mc-audio local sound lanes (validated end to end on Apple Silicon 2026-07-07).
 - The writing lane (braindump, outline, script) is the core promise and is wired end to end with live blacklist linting; it has had the least real-video exercise of the core stages, so treat your first run through it as a shakedown and feed mc-retro afterward.
-- Planned: Premiere (xmeml) and CMX3600 EDL export lanes, per-episode stream packs with the Ecamm target (the named 1.0.x fast-follow), multitrack recording support, local-first TTS/SFX/music lanes, and a research/show-prep skill. See [TODO.md](TODO.md) for the full roadmap.
+- Planned: Premiere (xmeml) and CMX3600 EDL export lanes, per-episode stream packs with the Ecamm target (the named 1.0.x fast-follow), multitrack recording support, the remaining audio lanes (full songs with vocals, plus the paid opt-in rungs of the audio ladder), and a research/show-prep skill. See [TODO.md](TODO.md) for the full roadmap.
 
 ## Part of the BMad ecosystem
 

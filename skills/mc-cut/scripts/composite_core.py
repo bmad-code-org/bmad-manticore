@@ -18,7 +18,8 @@ guaranteed to bake the same thing:
     - ffmpeg filter_complex and command construction, with optional overlay
       compositing (ProRes 4444 / WebM / mp4 / PNG over the concat output)
     - chunk planning for segment-parallel final renders
-    - encoder selection (videotoolbox hardware on macOS, libx264 fallback)
+    - encoder selection (videotoolbox on macOS; probed nvenc/qsv/amf ladder
+      on Windows and nvenc/vaapi ladder on Linux; libx264 fallback)
     - disk-space estimation and preflight
     - ffmpeg -progress output parsing
     - ffprobe wrappers and boundary-frame extraction
@@ -204,7 +205,8 @@ def resolve_overlays(beats, graphics_dir):
 # --- ffmpeg filtergraph and command -----------------------------------------
 
 
-def build_filter_complex(edl, source_index, height, overlays=(), overlay_size=None):
+def build_filter_complex(edl, source_index, height, overlays=(), overlay_size=None,
+                         hwupload=False):
     """Build the filter_complex string for the whole timeline.
 
     source_index maps each source path to its ffmpeg -i input index. Each
@@ -218,6 +220,10 @@ def build_filter_complex(edl, source_index, height, overlays=(), overlay_size=No
     given, PTS shifted to its timeline start, overlay with eof_action=pass and
     an enable window). With overlays the chain ends in format=yuv420p so the
     output stays player-safe. Final labels are always [outv]/[outa].
+
+    hwupload=True ends the video chain in format=nv12,hwupload instead, for
+    encoders that only take hardware frames (vaapi); the caller must also set
+    up the device (encoder_init_flags).
     """
     fade = edl.get("fade_ms", 30) / 1000.0
     parts, vlabels, alabels = [], [], []
@@ -252,7 +258,11 @@ def build_filter_complex(edl, source_index, height, overlays=(), overlay_size=No
     n = len(edl["segments"])
     concat_inputs = "".join(v + a for v, a in zip(vlabels, alabels))
     if not overlays:
-        parts.append(f"{concat_inputs}concat=n={n}:v=1:a=1[outv][outa]")
+        if hwupload:
+            parts.append(f"{concat_inputs}concat=n={n}:v=1:a=1[basev][outa]")
+            parts.append("[basev]format=nv12,hwupload[outv]")
+        else:
+            parts.append(f"{concat_inputs}concat=n={n}:v=1:a=1[outv][outa]")
         return ";".join(parts)
     parts.append(f"{concat_inputs}concat=n={n}:v=1:a=1[basev][outa]")
     prev = "basev"
@@ -270,7 +280,10 @@ def build_filter_complex(edl, source_index, height, overlays=(), overlay_size=No
             f"enable='between(t,{_fmt(ov['start'])},{_fmt(end_t)})'[{out_lab}]"
         )
         prev = out_lab
-    parts.append(f"[{prev}]format=yuv420p[outv]")
+    if hwupload:
+        parts.append(f"[{prev}]format=nv12,hwupload[outv]")
+    else:
+        parts.append(f"[{prev}]format=yuv420p[outv]")
     return ";".join(parts)
 
 
@@ -279,7 +292,8 @@ PREVIEW_ENCODE = ["-c:v", "libx264", "-crf", "28", "-preset", "veryfast",
 
 
 def build_command(edl, project_dir, output, height, overlays=(),
-                  overlay_size=None, encode=None, extra_output_flags=()):
+                  overlay_size=None, encode=None, extra_output_flags=(),
+                  encoder=None):
     """Assemble (ffmpeg_argv, source_index) for one render invocation.
 
     encode replaces the default preview encode args (libx264 crf 28 veryfast
@@ -287,13 +301,18 @@ def build_command(edl, project_dir, output, height, overlays=(),
     cap (looped/synthetic sources must never run open-ended); video overlay
     inputs are -t capped to the beat's dur too, so decode stops at the enable
     window. -movflags +faststart is added for .mp4/.mov outputs.
+
+    encoder (optional) is the encoder name the encode args target; it only
+    matters for encoders that need device setup and hardware frames (vaapi
+    gets -init_hw_device flags and an hwupload filtergraph tail). Software
+    and videotoolbox/nvenc/qsv/amf encoders need nothing here.
     """
     distinct = []
     for seg in edl["segments"]:
         if seg["source"] not in distinct:
             distinct.append(seg["source"])
     source_index = {src: i for i, src in enumerate(distinct)}
-    argv = ["ffmpeg", "-y"]
+    argv = ["ffmpeg", "-y", *encoder_init_flags(encoder)]
     for src in distinct:
         argv += ["-i", str((project_dir / src).resolve())]
     ovs = []
@@ -308,7 +327,8 @@ def build_command(edl, project_dir, output, height, overlays=(),
         ovs.append(entry)
     argv += [
         "-filter_complex",
-        build_filter_complex(edl, source_index, height, ovs, overlay_size),
+        build_filter_complex(edl, source_index, height, ovs, overlay_size,
+                             hwupload=encoder_needs_hwupload(encoder)),
         "-map", "[outv]", "-map", "[outa]",
     ]
     argv += list(encode) if encode else list(PREVIEW_ENCODE)
@@ -397,17 +417,94 @@ def list_encoders():
     return names
 
 
-def pick_encoder(requested="auto", available=None, system=None):
-    """Resolve the encoder: hardware videotoolbox on macOS when available,
-    libx264 otherwise; an explicit request falls back to libx264 when the
-    local ffmpeg does not list it."""
+# Hardware-encode ladders, probed in order on auto selection. Darwin is not
+# in the table: videotoolbox is picked on listing alone (the long-validated
+# reference behavior), no test encode.
+HW_LADDERS = {
+    "Windows": ("h264_nvenc", "h264_qsv", "h264_amf"),
+    "Linux": ("h264_nvenc", "h264_vaapi"),
+}
+
+# Encoders whose rate control is a bitrate from the ladder (no dependable
+# CRF mode across drivers).
+HW_SUFFIXES = ("_videotoolbox", "_nvenc", "_qsv", "_amf", "_vaapi")
+
+
+def is_hardware_encoder(encoder):
+    """True for encoders that take the bitrate ladder instead of -crf."""
+    return bool(encoder) and encoder.endswith(HW_SUFFIXES)
+
+
+def encoder_needs_hwupload(encoder):
+    """True for encoders that only accept hardware frames, so the video
+    chain must end in format=nv12,hwupload (vaapi)."""
+    return bool(encoder) and encoder.endswith("_vaapi")
+
+
+def encoder_init_flags(encoder):
+    """Global ffmpeg flags an encoder needs before any input (vaapi device
+    init and the filter device binding); empty for everything else."""
+    if encoder_needs_hwupload(encoder):
+        return ["-init_hw_device", "vaapi=va", "-filter_hw_device", "va"]
+    return []
+
+
+def encoder_probe_command(encoder):
+    """ffmpeg argv for a one-frame test encode: lavfi color source to the
+    null muxer. Listing an encoder proves the build has it; only a real
+    encode proves the driver/hardware behind it works."""
+    argv = ["ffmpeg", "-hide_banner", "-v", "error",
+            *encoder_init_flags(encoder),
+            "-f", "lavfi", "-i", "color=c=black:size=320x180:rate=30"]
+    if encoder_needs_hwupload(encoder):
+        argv += ["-vf", "format=nv12,hwupload"]
+    argv += ["-frames:v", "1", "-c:v", encoder, "-f", "null", "-"]
+    return argv
+
+
+_probe_cache = {}
+
+
+def probe_encoder(encoder, cache=None):
+    """One-frame test encode of `encoder`, cached per process so each
+    encoder is probed at most once per run. cache=None uses the module
+    cache; tests pass their own dict."""
+    cache = _probe_cache if cache is None else cache
+    if encoder in cache:
+        return cache[encoder]
+    try:
+        proc = subprocess.run(encoder_probe_command(encoder),
+                              capture_output=True, text=True, timeout=30)
+        ok = proc.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        ok = False
+    cache[encoder] = ok
+    return ok
+
+
+def pick_encoder(requested="auto", available=None, system=None, probe=None):
+    """Resolve the encoder for this run.
+
+    Explicit request: returned when the local ffmpeg lists it, libx264
+    otherwise (unchanged). Auto on Darwin: h264_videotoolbox when listed,
+    libx264 otherwise (unchanged, never probed). Auto elsewhere: the first
+    HW_LADDERS entry for the OS that is both listed by ffmpeg AND passes a
+    one-frame test encode (probe_encoder, cached per run); libx264 when the
+    whole ladder fails. probe is injectable for tests."""
     system = system or platform.system()
     if available is None:
         available = list_encoders()
     if requested and requested != "auto":
         return requested if requested in available else "libx264"
-    if system == "Darwin" and "h264_videotoolbox" in available:
-        return "h264_videotoolbox"
+    if system == "Darwin":
+        if "h264_videotoolbox" in available:
+            return "h264_videotoolbox"
+        return "libx264"
+    if probe is None:
+        probe = probe_encoder
+    for enc in HW_LADDERS.get(system, ()):
+        if enc in available and probe(enc):
+            return enc
     return "libx264"
 
 
@@ -425,15 +522,21 @@ def bitrate_for(height):
 
 
 def encode_args(encoder, crf=18, height=1080):
-    """Encode argv fragment for the final render. videotoolbox encoders take a
-    bitrate from the ladder (they have no CRF mode); libx264 takes -crf."""
-    if encoder.endswith("_videotoolbox"):
-        v = ["-c:v", encoder, "-b:v", f"{bitrate_for(height)}k", "-allow_sw", "1"]
+    """Encode argv fragment for the final render. Hardware encoders take a
+    bitrate from the ladder (no dependable CRF mode across drivers); libx264
+    takes -crf. -pix_fmt is not forced for nvenc/qsv/amf (each negotiates
+    its own supported format from the yuv420p filtergraph output) nor for
+    vaapi (it receives hardware frames via the hwupload chain)."""
+    if is_hardware_encoder(encoder):
+        v = ["-c:v", encoder, "-b:v", f"{bitrate_for(height)}k"]
+        if encoder.endswith("_videotoolbox"):
+            v += ["-allow_sw", "1", "-pix_fmt", "yuv420p"]
         if encoder == "hevc_videotoolbox":
             v += ["-tag:v", "hvc1"]
     else:
-        v = ["-c:v", encoder, "-crf", str(crf), "-preset", "medium"]
-    return v + ["-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k"]
+        v = ["-c:v", encoder, "-crf", str(crf), "-preset", "medium",
+             "-pix_fmt", "yuv420p"]
+    return v + ["-c:a", "aac", "-b:a", "192k"]
 
 
 def estimate_output_bytes(duration_s, height, encoder="libx264"):
