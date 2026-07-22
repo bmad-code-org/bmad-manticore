@@ -3,9 +3,10 @@
 # requires-python = ">=3.11"
 # ///
 """Tests for preflight.py: the pure parts (rate parsing, VFR detection,
-standard-rate selection, remux command construction) plus CLI exit codes and
-a probe/QC integration pass over a fixture synthesized with an ffmpeg test
-source (skipped when ffmpeg is not installed)."""
+standard-rate selection, remux command construction including the hardware
+encoder ladder and vaapi wiring) plus CLI exit codes and a probe/QC
+integration pass over a fixture synthesized with an ffmpeg test source
+(skipped when ffmpeg is not installed). No hardware encoders are probed."""
 import importlib.util
 import json
 import shutil
@@ -86,6 +87,36 @@ class TestRemuxCommand(unittest.TestCase):
         cmd = mod.remux_command("in.mov", "out.mp4", "30/1",
                                 "h264_videotoolbox")
         self.assertIn("-b:v 24000k", " ".join(cmd))
+
+    def test_ladder_hardware_encoders_take_master_bitrate(self):
+        for enc in ("h264_nvenc", "h264_qsv", "h264_amf"):
+            cmd = mod.remux_command("in.mov", "out.mp4", "30/1", enc,
+                                    height=1080)
+            joined = " ".join(cmd)
+            self.assertIn(f"-c:v {enc}", joined)
+            self.assertIn("-b:v 24000k", joined)
+            self.assertNotIn("-crf", joined)
+            self.assertNotIn("-allow_sw", joined)
+            self.assertNotIn("hwupload", joined)
+
+    def test_vaapi_gets_device_init_and_hwupload(self):
+        cmd = mod.remux_command("in.mov", "out.mp4", "30/1", "h264_vaapi",
+                                height=1080)
+        joined = " ".join(cmd)
+        self.assertIn("-init_hw_device vaapi=va", joined)
+        self.assertIn("-filter_hw_device va", joined)
+        self.assertIn("-vf fps=30/1,format=nv12,hwupload", joined)
+        self.assertIn("-b:v 24000k", joined)
+        self.assertNotIn("-crf", joined)
+        # vaapi receives hardware frames; -pix_fmt must not be forced
+        self.assertNotIn("-pix_fmt", joined)
+        # device init comes before the input
+        self.assertLess(cmd.index("-init_hw_device"), cmd.index("-i"))
+
+    def test_software_encoders_keep_pix_fmt(self):
+        cmd = mod.remux_command("in.mov", "out.mp4", "30/1", "libx264")
+        self.assertIn("-pix_fmt yuv420p", " ".join(cmd))
+        self.assertNotIn("-init_hw_device", cmd)
 
 
 class TestMasterEstimate(unittest.TestCase):

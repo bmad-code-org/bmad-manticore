@@ -8,7 +8,9 @@ into the cache the driver points HF_HOME at.
 Instrumentals only: beds, stingers, intro themes. No vocals or lyrics (a
 full-song lane is separate and unvalidated; see references/audio-lanes.md).
 Validated 2026-07-07 on Apple Silicon MPS: about 10 s of audio in 55 s once
-the model is loaded.
+the model is loaded. Device ladder: cuda if available, else mps, else cpu
+(the CUDA branch is code-complete but awaits a validation run on real
+NVIDIA hardware).
 
 Args: --prompt, --out <wav>, --seconds (default 10, capped at 30).
 Exit 0 ok, 1 generation failure, 2 usage error.
@@ -40,7 +42,8 @@ def main() -> None:
 
     from transformers import AutoProcessor, MusicgenForConditionalGeneration
 
-    device = "mps" if torch.backends.mps.is_available() else "cpu"
+    device = ("cuda" if torch.cuda.is_available()
+              else "mps" if torch.backends.mps.is_available() else "cpu")
     t0 = time.time()
     processor = AutoProcessor.from_pretrained("facebook/musicgen-small")
     model = MusicgenForConditionalGeneration.from_pretrained(

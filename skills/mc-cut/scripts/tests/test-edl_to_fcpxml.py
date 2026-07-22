@@ -9,13 +9,18 @@ a canned EDL with mocked probe data, and the format/exit-code switches.
 The ffprobe path and editor-import sync are exercised by running the script
 against a real source; they are not unit-tested here."""
 import importlib.util
+import json
+import os
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+import warnings
 import xml.etree.ElementTree as ET
 from fractions import Fraction
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
+from urllib.parse import quote
 
 SCRIPT = Path(__file__).resolve().parent.parent / "edl_to_fcpxml.py"
 
@@ -97,6 +102,35 @@ class TestSnapping(unittest.TestCase):
         for k in (1, 7, 293, 1000):
             t = mod.parse_time(mod.fmt_time(k, num, den))
             self.assertEqual((t / fd).denominator, 1)
+
+
+class TestMediaRepUri(unittest.TestCase):
+    # PurePath.as_uri() is deprecated (removal 3.19) but only for PURE paths;
+    # production always passes a concrete resolved Path. Pure paths here let
+    # the Windows URI shape be asserted from any OS.
+
+    def uri(self, pure_path):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            return mod.media_rep_uri(pure_path)
+
+    def test_posix_byte_identical_to_previous_quote_form(self):
+        # The pre-as_uri() construction was 'file://' + quote(str(path));
+        # emitted FCPXML must not change on POSIX paths.
+        for raw in ("/tmp/my project/raw/camera-a.mp4", "/tmp/a:b~c.mp4"):
+            p = PurePosixPath(raw)
+            self.assertEqual(self.uri(p), "file://" + quote(str(p)))
+        self.assertEqual(
+            self.uri(PurePosixPath("/tmp/my project/raw/camera-a.mp4")),
+            "file:///tmp/my%20project/raw/camera-a.mp4")
+
+    def test_windows_drive_letter_uri(self):
+        p = PureWindowsPath(r"C:\media\my take.mp4")
+        self.assertEqual(self.uri(p), "file:///C:/media/my%20take.mp4")
+
+    def test_windows_unc_share_uri(self):
+        p = PureWindowsPath(r"\\server\share\take.mp4")
+        self.assertEqual(self.uri(p), "file://server/share/take.mp4")
 
 
 class TestBuildDocument(unittest.TestCase):
@@ -197,6 +231,76 @@ class TestCli(unittest.TestCase):
                 '"segments":[{"source":"raw/missing.mp4","start":0,"end":1}]}')
             r = run([str(edl), "-o", str(Path(tmp) / "o.fcpxml")])
             self.assertEqual(r.returncode, 1, r.stderr)
+
+
+def run_ascii_locale(args):
+    """Run the script under an ASCII locale codec with UTF-8 mode off.
+
+    Simulates the Windows failure class (locale codec cp1252): any file
+    read/write that does not pass encoding="utf-8" explicitly corrupts or
+    crashes on non-ASCII content."""
+    env = dict(os.environ, LC_ALL="C", LANG="C", PYTHONCOERCECLOCALE="0")
+    return subprocess.run(
+        [sys.executable, "-X", "utf8=0", str(SCRIPT), *args],
+        capture_output=True, text=True, env=env)
+
+
+class TestUtf8UnderNonUtf8Locale(unittest.TestCase):
+    def test_reading_a_non_ascii_edl_does_not_depend_on_the_locale(self):
+        # A UTF-8 edl.json whose beat text is Czech must parse under an
+        # ASCII locale codec and reach the normal missing-source error,
+        # never a UnicodeDecodeError.
+        with tempfile.TemporaryDirectory() as tmp:
+            edl = Path(tmp) / "cut" / "edl.json"
+            edl.parent.mkdir()
+            edl.write_text(
+                '{"source":"raw/missing.mp4","fade_ms":30,"pad_ms":60,'
+                '"segments":[{"source":"raw/missing.mp4","start":0,"end":1,'
+                '"beat":"Čau, uh, světe"}]}', encoding="utf-8")
+            r = run_ascii_locale([str(edl), "-o", str(Path(tmp) / "o.fcpxml")])
+            self.assertNotIn("UnicodeDecodeError", r.stderr)
+            self.assertEqual(r.returncode, 1, r.stderr)
+            self.assertIn("source not found", r.stderr)
+
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"),
+                         "ffmpeg/ffprobe not installed")
+    def test_non_ascii_clip_names_export_end_to_end(self):
+        # Full export with a Czech beat name under an ASCII locale codec:
+        # the FCPXML must be written as the UTF-8 its XML declaration
+        # promises (the script's own ET.parse round-trip enforces it), so
+        # the run succeeds and the clip name survives byte-exact.
+        with tempfile.TemporaryDirectory() as tmp:
+            proj = Path(tmp)
+            (proj / "raw").mkdir()
+            (proj / "cut").mkdir()
+            r = subprocess.run(
+                ["ffmpeg", "-y",
+                 "-f", "lavfi", "-t", "2", "-i",
+                 "testsrc2=size=320x180:rate=30",
+                 "-f", "lavfi", "-t", "2", "-i",
+                 "sine=frequency=440:sample_rate=48000",
+                 "-t", "2", "-shortest",
+                 "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
+                 "-pix_fmt", "yuv420p", "-c:a", "aac",
+                 str(proj / "raw" / "a.mp4")],
+                capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            edl = {"source": "raw/a.mp4", "fade_ms": 30, "pad_ms": 60,
+                   "segments": [{"source": "raw/a.mp4", "start": 0.5,
+                                 "end": 1.5, "beat": "Čau, uh, světe"}]}
+            (proj / "cut" / "edl.json").write_text(
+                json.dumps(edl, ensure_ascii=False), encoding="utf-8")
+            out = proj / "o.fcpxml"
+            r = run_ascii_locale([str(proj / "cut" / "edl.json"),
+                                  "-o", str(out)])
+            self.assertNotIn("UnicodeDecodeError", r.stderr)
+            self.assertNotIn("UnicodeEncodeError", r.stderr)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            text = out.read_text(encoding="utf-8")
+            self.assertIn("Čau, uh, světe", text)
+            names = [c.get("name")
+                     for c in ET.parse(out).getroot().iter("asset-clip")]
+            self.assertIn("Čau, uh, světe", names)
 
 
 if __name__ == "__main__":

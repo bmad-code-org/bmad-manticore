@@ -2,17 +2,22 @@
 # /// script
 # requires-python = ">=3.11"
 # ///
-"""Tests for farm_audio.py: command construction per kind, provider gating,
-workspace readiness, manifest rows, and the local lane end to end using a
-fake venv python (a shell shim). No models, no network, no downloads."""
+"""Tests for farm_audio.py: command construction per kind, per-OS venv
+interpreter paths, provider gating, workspace readiness, manifest rows,
+and the local lane end to end. The fake workspace is a real throwaway
+venv (works on POSIX and Windows alike) whose site-packages carries stub
+numpy/scipy/torch/diffusers modules, so the real sfx engine payload runs
+without heavy deps. No models, no network, no downloads."""
 import importlib.util
 import json
 import os
-import stat
 import subprocess
 import sys
+import sysconfig
 import tempfile
 import unittest
+import unittest.mock
+import venv
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parent.parent / "farm_audio.py"
@@ -20,6 +25,70 @@ SCRIPT = Path(__file__).resolve().parent.parent / "farm_audio.py"
 spec = importlib.util.spec_from_file_location("farm_audio", SCRIPT)
 mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
+
+# Stub modules planted in the fake venv so the real sfx_audioldm2.py
+# payload runs end to end on the cpu rung of the device ladder and
+# writes the --out file, with no heavy deps.
+ENGINE_STUBS = {
+    "numpy.py": "def abs(x):\n    return x\n",
+    "scipy/__init__.py": "",
+    "scipy/io/__init__.py": "",
+    "scipy/io/wavfile.py": (
+        "def write(path, sr, data):\n"
+        "    with open(path, 'wb') as f:\n"
+        "        f.write(b'RIFF')\n"),
+    "torch.py": (
+        "float32 = 'float32'\n"
+        "class _Flag:\n"
+        "    @staticmethod\n"
+        "    def is_available():\n"
+        "        return False\n"
+        "class _Backends:\n"
+        "    mps = _Flag()\n"
+        "cuda = _Flag()\n"
+        "backends = _Backends()\n"
+        "class Generator:\n"
+        "    def __init__(self, device=None):\n"
+        "        pass\n"
+        "    def manual_seed(self, seed):\n"
+        "        return self\n"),
+    "diffusers.py": (
+        "class _Audio:\n"
+        "    def max(self):\n"
+        "        return 1.0\n"
+        "    def __truediv__(self, other):\n"
+        "        return self\n"
+        "    def __mul__(self, other):\n"
+        "        return self\n"
+        "class _Out:\n"
+        "    def __init__(self):\n"
+        "        self.audios = [_Audio()]\n"
+        "class AudioLDM2Pipeline:\n"
+        "    @classmethod\n"
+        "    def from_pretrained(cls, *a, **k):\n"
+        "        return cls()\n"
+        "    def to(self, device):\n"
+        "        return self\n"
+        "    def __call__(self, *a, **k):\n"
+        "        return _Out()\n"),
+}
+
+
+def make_venv_shim(ws: Path, stubs: dict[str, str]) -> Path:
+    """Create a real throwaway venv at ws/.venv and plant stub modules in
+    its site-packages. Returns the per-OS venv interpreter path.
+
+    Duplicated in test-ensure_workspace.py; keep the two in sync."""
+    venv.create(ws / ".venv", with_pip=False, symlinks=(os.name != "nt"))
+    site = Path(sysconfig.get_path(
+        "purelib", scheme="venv",
+        vars={"base": str(ws / ".venv"), "platbase": str(ws / ".venv")}))
+    site.mkdir(parents=True, exist_ok=True)
+    for rel, body in stubs.items():
+        dest = site / Path(rel)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(body, encoding="utf-8")
+    return mod.venv_python(ws)
 
 
 def make_args(**kw):
@@ -33,20 +102,26 @@ def make_args(**kw):
 
 
 def fake_workspace(root: Path) -> Path:
-    """A workspace whose venv python is a shim that writes the --out file."""
+    """A workspace whose venv runs the real sfx payload against stubs."""
     ws = root / "audio-lab"
-    (ws / ".venv" / "bin").mkdir(parents=True)
+    ws.mkdir(parents=True)
     (ws / "models").mkdir()
-    shim = ws / ".venv" / "bin" / "python"
-    shim.write_text(
-        "#!/bin/sh\n"
-        'prev=""\n'
-        'for a in "$@"; do\n'
-        '  if [ "$prev" = "--out" ]; then printf RIFF > "$a"; fi\n'
-        '  prev="$a"\n'
-        "done\n")
-    shim.chmod(shim.stat().st_mode | stat.S_IEXEC)
+    make_venv_shim(ws, ENGINE_STUBS)
     return ws
+
+
+class TestVenvPython(unittest.TestCase):
+    def test_posix_layout(self):
+        ws = Path("/ws")
+        with unittest.mock.patch.object(os, "name", "posix"):
+            py = mod.venv_python(ws)
+        self.assertEqual(py, ws / ".venv" / "bin" / "python")
+
+    def test_windows_layout(self):
+        ws = Path("/ws")
+        with unittest.mock.patch.object(os, "name", "nt"):
+            py = mod.venv_python(ws)
+        self.assertEqual(py, ws / ".venv" / "Scripts" / "python.exe")
 
 
 class TestBuildCommand(unittest.TestCase):
@@ -59,6 +134,11 @@ class TestBuildCommand(unittest.TestCase):
         self.assertIn("am_michael", cmd)
         self.assertIn("1.1", cmd)
         self.assertTrue(cmd[1].endswith("tts_kokoro.py"))
+
+    def test_command_runs_the_venv_interpreter(self):
+        cmd = mod.build_command(
+            make_args(prompt="whoosh"), Path("/out/s.wav"))
+        self.assertEqual(cmd[0], str(mod.venv_python(Path("/ws"))))
 
     def test_podcast_uses_script_mode(self):
         cmd = mod.build_command(

@@ -3,11 +3,16 @@
 # requires-python = ">=3.11"
 # ///
 """Tests for verify_ograf.py — the deterministic, browser-free parts: manifest
-discovery, usage/structure errors, and the graceful no-headless fallback.
+discovery, usage/structure errors, the per-OS manual-step strings, and the
+graceful no-headless fallback.
 
 The full headless render check requires Playwright + a browser and is exercised
-by running the script directly on a package; it is not unit-tested here."""
+by running the script directly on a package; it is not unit-tested here. The
+interactive serve-and-open branch is tty-gated and preview.html-gated, so it
+never fires under the test harness; only its gating is asserted."""
+import contextlib
 import importlib.util
+import io
 import json
 import subprocess
 import sys
@@ -62,6 +67,51 @@ class TestVerifyHelpers(unittest.TestCase):
             empty.mkdir()
             with self.assertRaises(SystemExit):
                 verify.find_manifest(empty)
+
+
+class TestManualSteps(unittest.TestCase):
+    def test_steps_per_os(self):
+        pkg = Path("/x/pkg")
+        expected_open = {"Darwin": "open http://",
+                         "Windows": "start http://",
+                         "Linux": "xdg-open http://"}
+        for system, needle in expected_open.items():
+            steps = verify.manual_verify_steps(pkg, system=system)
+            joined = "\n".join(steps)
+            self.assertIn(needle, joined, system)
+            # No shell chaining and no bare python3: both are POSIX-shaped.
+            self.assertNotIn("&&", joined, system)
+            self.assertNotIn("python3", joined, system)
+            self.assertIn("uv run python -m http.server 8771", joined, system)
+            self.assertIn(str(pkg), joined, system)
+
+    def test_windows_cd_crosses_drives(self):
+        steps = verify.manual_verify_steps(Path("/x/pkg"), system="Windows")
+        self.assertIn("cd /d", "\n".join(steps))
+
+    def test_default_system_is_this_machine(self):
+        a = verify.manual_verify_steps(Path("/x/pkg"))
+        b = verify.manual_verify_steps(Path("/x/pkg"),
+                                       system=verify.platform.system())
+        self.assertEqual(a, b)
+
+    def test_manual_steps_prints_json_and_never_blocks_without_tty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg = make_pkg(tmp)  # no preview.html and no tty: both gates hold
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                verify.manual_steps(pkg, "Playwright not installed")
+            payload = json.loads(buf.getvalue())
+            self.assertEqual(payload["status"], "skipped-no-headless")
+            self.assertEqual(payload["reason"], "Playwright not installed")
+            self.assertEqual(payload["manual_verify"],
+                             verify.manual_verify_steps(pkg))
+
+    def test_open_preview_noop_without_preview_html(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg = make_pkg(tmp)
+            # Must return immediately (no server, no browser, no input()).
+            self.assertIsNone(verify.open_preview_if_interactive(pkg))
 
 
 class TestVerifyCli(unittest.TestCase):

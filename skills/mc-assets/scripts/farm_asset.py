@@ -35,6 +35,21 @@ Lanes:
         passed through untouched, so the tool's own auth (subscription login,
         env keys) just works; tool output streams live for progress. New
         files that appear under --out-dir are the result.
+
+        Template quoting is POSIX shell quoting on EVERY OS (shlex with
+        posix=True): quote arguments with single or double quotes exactly as
+        in a POSIX shell, even on Windows; backslash is an escape character,
+        so prefer forward slashes in any path baked into a template. Before
+        execution the command's argv[0] is resolved with shutil.which(), so
+        npm-installed tools registered by bare name launch on Windows too
+        (which() finds the .cmd/.exe shim via PATH + PATHEXT, which a
+        shell-free subprocess cannot do by itself). One Windows guard: when
+        argv[0] resolves to a .cmd/.bat shim, cmd.exe reparses the argument
+        line with its own quoting and expands metacharacters, so arguments
+        containing any of " % ^ & | < > (for example a prompt quoting exact
+        on-image text) would reach the tool corrupted; the script refuses to
+        run that combination (exit 2) and says to re-register the tool via
+        its real executable (.exe, or `node <path-to-cli.js>`).
     api (NOT IMPLEMENTED in 1.0)
         xai-api (xAI Imagine REST) and veo-api (Veo via Gemini REST) are the
         metered lane, deferred to 1.0.x: see TODO.md build-order item 3. The
@@ -75,6 +90,7 @@ import argparse
 import datetime
 import json
 import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -108,8 +124,11 @@ def plan_invocation(tool, kind, prompt, out_dir, ref=None, seconds=DEFAULT_SECON
     """Build the argv for a registered tool's headless template.
 
     Substitutes <prompt>, <ref>, <seconds>, <out-dir>, <kind>, <model> inside
-    the shlex-split tokens, so quoting in the template is preserved. Raises
-    ValueError when the template and the arguments disagree."""
+    the shlex-split tokens, so quoting in the template is preserved. The
+    template is parsed with POSIX shell quoting on every OS (posix=True made
+    explicit): registered command strings tokenize identically on macOS,
+    Linux, and Windows. Raises ValueError when the template and the
+    arguments disagree."""
     headless = (tool.get("headless") or "").strip()
     if not headless:
         raise ValueError(f"tool {tool.get('name')!r} has no headless invocation; "
@@ -134,13 +153,65 @@ def plan_invocation(tool, kind, prompt, out_dir, ref=None, seconds=DEFAULT_SECON
         "model": models[0] if models else "",
     }
     argv = []
-    for token in shlex.split(headless):
+    for token in shlex.split(headless, posix=True):
         for key, value in subs.items():
             placeholder = f"<{key}>"
             if placeholder in token:
                 token = token.replace(placeholder, value)
         argv.append(token)
     return argv
+
+
+def resolve_executable(command):
+    """Return command with argv[0] resolved through shutil.which().
+
+    subprocess.run without a shell cannot launch Windows npm shims
+    (.cmd/.bat/.exe) by bare name; which() finds the concrete file via
+    PATH + PATHEXT (and is a no-op path normalization elsewhere). When
+    which() finds nothing the command is returned unchanged so the
+    FileNotFoundError path still reports the registered name."""
+    if not command:
+        return command
+    resolved = shutil.which(command[0])
+    if resolved:
+        return [resolved, *command[1:]]
+    return command
+
+
+# Characters cmd.exe rewrites or interprets inside .cmd/.bat argument lines.
+CMD_SHIM_UNSAFE = ('"', "%", "^", "&", "|", "<", ">", "\r", "\n")
+
+
+def check_cmd_shim_safety(command):
+    """Refuse to pass cmd.exe-mangled arguments to a .cmd/.bat shim (pure).
+
+    When argv[0] resolves to a Windows .cmd/.bat file, CreateProcess hands
+    the command line to cmd.exe, which parses quoting differently from the
+    MSVCRT rules subprocess used to build it and expands metacharacters
+    (%VAR%, ^, &, |, <, >): an embedded double quote, e.g. a prompt quoting
+    exact thumbnail text per generative rule 5, reaches the tool corrupted,
+    and %WORD% or & can be expanded or executed (BatBadBut-class argument
+    injection). There is no escaping that is safe for every shim, so this
+    guard fails loudly instead of generating a wrong or dangerous command.
+    Raises ValueError naming the offending characters when argv[0] ends in
+    .cmd/.bat and any later argument contains one; returns the command
+    unchanged otherwise (all other executables, including .exe, are safe)."""
+    if not command:
+        return command
+    if not str(command[0]).lower().endswith((".cmd", ".bat")):
+        return command
+    for arg in command[1:]:
+        bad = sorted({c for c in CMD_SHIM_UNSAFE if c in arg})
+        if bad:
+            shown = " ".join("newline" if c in "\r\n" else c for c in bad)
+            raise ValueError(
+                f"{command[0]} is a cmd.exe batch shim and an argument "
+                f"contains character(s) cmd.exe would mangle or expand "
+                f"({shown}); refusing to run with corrupted arguments. "
+                "Re-register the tool via mc-setup pointing at the real "
+                "executable (the .exe, or `node <path-to-cli.js>` for npm "
+                "tools), or remove these characters from the prompt.")
+    return command
 
 
 def manifest_rows(new_files, kind, prompt, provider, model):
@@ -244,13 +315,20 @@ def main(argv=None):
         return 0
 
     before = snapshot(out_dir)
+    run_argv = resolve_executable(command)
+    try:
+        check_cmd_shim_safety(run_argv)
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        return 2
     try:
         # cwd = out_dir so tools that write to their working directory land
         # here; the environment is inherited untouched (env passthrough);
-        # output streams live so long generations show progress.
-        result = subprocess.run(command, cwd=out_dir)
+        # output streams live so long generations show progress. argv[0] is
+        # pre-resolved via shutil.which so Windows .cmd/.exe shims launch.
+        result = subprocess.run(run_argv, cwd=out_dir)
     except FileNotFoundError:
-        print(f"tool executable not found: {command[0]} (verify the [[tools]] "
+        print(f"tool executable not found: {run_argv[0]} (verify the [[tools]] "
               "registration and PATH)", file=sys.stderr)
         return 1
     if result.returncode != 0:

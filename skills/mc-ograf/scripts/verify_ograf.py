@@ -13,7 +13,12 @@ Exit codes:
   2  bad usage / package not found
   3  could not run headless (Playwright missing or no browser) -> manual steps printed
 
-Playwright is an OPTIONAL dependency. Without it, this prints how to verify by hand.
+Playwright is an OPTIONAL dependency. Without it, this prints how to verify by
+hand: per-OS instructions (open/start/xdg-open, no shell chaining), and when a
+human terminal is attached AND the package has a preview.html, it also serves
+the package in-process and opens the preview in the default browser
+(webbrowser.open) so the manual check starts already running. Agent/CI runs
+(no tty) never block.
 Stdlib only except for the optional Playwright import.
 """
 # /// script
@@ -26,11 +31,13 @@ Stdlib only except for the optional Playwright import.
 import argparse
 import http.server
 import json
+import platform
 import socket
 import socketserver
 import sys
 import tempfile
 import threading
+import webbrowser
 from pathlib import Path
 
 VERIFY_HTML = "_ograf_verify.html"
@@ -67,20 +74,70 @@ def serve(directory: Path):
     return httpd, port
 
 
+def manual_verify_steps(pkg: Path, system: str | None = None) -> list[str]:
+    """Per-OS manual verification steps (no shell chaining, no bare python3).
+
+    system defaults to this machine (platform.system()); tests pass it
+    explicitly to assert every OS variant from any OS."""
+    system = system or platform.system()
+    url = "http://localhost:8771/preview.html"
+    if system == "Windows":
+        cd_cmd = f'cd /d "{pkg}"'
+        open_cmd = f"start {url}"
+    elif system == "Darwin":
+        cd_cmd = f'cd "{pkg}"'
+        open_cmd = f"open {url}"
+    else:
+        cd_cmd = f'cd "{pkg}"'
+        open_cmd = f"xdg-open {url}"
+    return [
+        f"In a terminal, change into the package: {cd_cmd}",
+        "Serve it: uv run python -m http.server 8771",
+        f"Open the preview in a browser: {open_cmd}",
+        "Scrub the slider end-to-end; the graphic must animate in, hold, and out.",
+        "Open the browser console — there must be ZERO errors.",
+        "The checkerboard must show through (transparency).",
+    ]
+
+
+def open_preview_if_interactive(pkg: Path) -> None:
+    """When a human terminal is attached, serve the package in-process and
+    open preview.html in the default browser (webbrowser.open picks the
+    right opener on every OS), then hold the server until Enter.
+
+    A no-op when there is no tty (agent/CI runs must never block), when the
+    package has no preview.html, or on any failure."""
+    if not (pkg / "preview.html").is_file():
+        return
+    try:
+        if not (sys.stdin.isatty() and sys.stderr.isatty()):
+            return
+        httpd, port = serve(pkg)
+        url = f"http://127.0.0.1:{port}/preview.html"
+        try:
+            if not webbrowser.open(url):
+                return
+            print(f"preview served at {url}; press Enter to stop the server "
+                  "when done...", file=sys.stderr)
+            try:
+                input()
+            except EOFError:
+                pass
+        finally:
+            httpd.shutdown()
+    except Exception:
+        return
+
+
 def manual_steps(pkg: Path, msg: str):
     print(json.dumps({
         "ok": None,
         "status": "skipped-no-headless",
         "reason": msg,
-        "manual_verify": [
-            f"cd {pkg} && python3 -m http.server 8771",
-            "open http://localhost:8771/preview.html",
-            "Scrub the slider end-to-end; the graphic must animate in, hold, and out.",
-            "Open the browser console — there must be ZERO errors.",
-            "The checkerboard must show through (transparency).",
-        ],
+        "manual_verify": manual_verify_steps(pkg),
         "enable_headless": "install the 'playwright' package, then run: playwright install chromium",
     }, indent=2))
+    open_preview_if_interactive(pkg)
 
 
 def main():

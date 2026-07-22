@@ -39,7 +39,7 @@ Say "talk to Manny" and he routes you here, or say "run manticore setup" directl
 
 What the interview covers, in order:
 
-- Dependencies and platform: uv (required; runs all pipeline scripts), ffmpeg (with ffprobe), node/npx, git, optionally yt-dlp. It checks, you approve any installs. It also runs a platform gate: the default transcription lane is Apple-Silicon-only, and on other machines it points you at the documented fallbacks (see section 6).
+- Dependencies and platform: uv (required; runs all pipeline scripts), ffmpeg (with ffprobe), node/npx, git, optionally yt-dlp. It checks, you approve any installs. It also detects your OS, CPU architecture, and GPU vendor and picks the per-platform stack reference (macOS, Windows, or Linux) that drives the rest of the defaults: transcription lane, torch wheel source, encoder ladder, SVG rasterizer, fonts approach (see section 6 for transcription).
 - You: name, channel, the links that go in your video descriptions, your speaking rate (the guided voice-bible build later measures it from a real transcript, which beats the generic 145 wpm every time).
 - Video defaults: record resolution, delivery resolution, fps. Offer it a recent recording and it fills the values from ffprobe instead of guessing.
 - Live tool: obs, ecamm, or other, which drives the stream-pack lane's deliverable format. Any recurring shows or series you produce get noted for series folders and packaging templates.
@@ -57,7 +57,7 @@ Manticore renders by default, and setup asks you to confirm it rather than assum
 
 - A fast low-res preview render is produced after every cut-plan approval, so every iteration is watchable.
 - Once the graphics stage has rendered the overlays, the preview re-renders with them composited, so you iterate on overlays and CTAs visually.
-- At the final gate, a final-quality render is offered (delivery resolution and codec per your config).
+- At the final gate, a final-quality render is offered (delivery resolution and codec per your config), loudness-normalized to -14 LUFS by default (two-pass ffmpeg loudnorm; the preview is never normalized; `[render]` loudness-target and loudnorm are the knobs) with hardware encode probed per platform (videotoolbox on macOS; nvenc, qsv, amf on Windows; nvenc, vaapi on Linux; libx264 fallback).
 - The editor timeline export and all assets (edl.json, cutplan.md, overlays) are ALWAYS created alongside, so you can jump into Resolve, Premiere, or any editor at any step without losing work.
 
 Decline it and previews and finals become offers the pipeline makes instead of automatic outputs; the timeline export and assets remain always-on either way.
@@ -89,15 +89,15 @@ The Production Bible evolves after setup: mc-retro routes every visual-style not
 
 ## 6. Transcription for the cut stage
 
-The cut stage needs a word-level transcript with verbatim fillers (the "um"s and restarts are exactly what gets cut). The default provider is parakeet-mlx: free, local, word timestamps, fillers preserved verbatim, no API key. The model downloads once on first run.
+The cut stage needs a word-level transcript with verbatim fillers (the "um"s and restarts are exactly what gets cut). The default provider is `auto`: free, local, word timestamps, fillers preserved verbatim, no API key. On macOS Apple Silicon it runs parakeet-mlx (the reference lane); on Windows, Linux, and Intel Mac it runs onnx-asr with the very same parakeet-tdt-0.6b-v3 weights as an ONNX conversion, so filler preservation and 80 ms word timestamps carry over. The model downloads once on first run, and the script's dependencies are selected automatically per platform; no venv setup.
 
-Platform honesty: parakeet-mlx runs only on macOS Apple Silicon. On other machines, setup's dependency check flags it and points at local whisper.cpp or faster-whisper as fallbacks; they normalize fillers away, so cut quality drops, and a supported cross-platform lane is on the roadmap. Metered API providers exist behind the same `[transcription]` switch as explicit opt-in choices only; nothing metered is configured unless you choose it.
+Two platform notes: on a CUDA machine the onnx-asr lane escalates to GPU with `uv run --with "onnx-asr[gpu,hub]" python <path-to>/transcribe.py ...` (the `python` command matters: it skips the script's built-in cpu dependency so the GPU and CPU onnxruntime builds never co-install, a combination ONNX Runtime does not support; the script prints a warning when an NVIDIA GPU is present but CUDA support is missing), and when the ONNX runtime exposes no per-token scores, word confidences read 1.0 (no signal, never a fabricated number). Long recordings on the onnx-asr lane are chunked in 20 second windows with 2 second overlap and merged deterministically. Metered API providers exist behind the same `[transcription]` switch as explicit opt-in choices only; nothing metered is configured unless you choose it.
 
 ## 7. Your editor
 
 Render-first does not lock you out of your editor; the exit ramp is always built. Tell mc-setup what you finish in:
 
-- DaVinci Resolve or Final Cut Pro: an FCPXML timeline of trimmable clips (implemented), exported on every cut approval. Resolve 21+ users can also set `ograf-editable = true` to receive lower thirds as OGraf packages that stay editable inside Resolve's Inspector.
+- DaVinci Resolve or Final Cut Pro: an FCPXML timeline of trimmable clips (implemented), exported on every cut approval. Resolve 21+ users can also set `ograf-editable = true` to receive lower thirds as OGraf packages that stay editable inside Resolve's Inspector. Linux note: the free edition of Resolve cannot decode or encode H.264, H.265, or AAC, so the timeline imports but mp4 media needs transcoding to ProRes or DNxHR first (or Resolve Studio).
 - Premiere Pro: the xmeml export lane has not landed yet, so Premiere users work from the cut plan, edl.json, and the rendered preview/final, which map 1:1 onto manual cuts.
 - Descript or anything else: set `timeline-format = "none"`. You get the word-level transcript, cut decisions with reasons, and the renders; you apply the cuts in your tool.
 
@@ -125,7 +125,7 @@ A lane with no good answer stays empty: mc-assets stops and asks at farming time
 
 One standing rule regardless of lane: generated footage is for atmosphere and story beats. Anything showing a user interface or text that must read correctly comes from real screen recordings, because AI-generated UI and text render as convincing-at-a-glance gibberish.
 
-Sound follows the same local-first pattern through the mc-audio service skill: TTS narration and two-host dialogue (Kokoro-82M; stock voices, no cloning, so narration in your own voice still means recording it), instrumental music beds (MusicGen-small), and SFX (AudioLDM2) all run free and local. Setup confirms these lanes and offers to build the engine workspace at `manticore/engines/audio-lab` (a several-GB venv, ~340 MB of voice models now, ~5 GB of model cache on the first music or SFX run; nothing downloads without your go-ahead). Full songs with vocals have no validated local lane yet, and paid audio lanes (ElevenLabs, Gemini TTS) are explicit opt-ins.
+Sound follows the same local-first pattern through the mc-audio service skill: TTS narration and two-host dialogue (Kokoro-82M; stock voices, no cloning, so narration in your own voice still means recording it), instrumental music beds (MusicGen-small), and SFX (AudioLDM2) all run free and local. The engines pick cuda, then mps, then cpu automatically. Setup confirms these lanes and offers to build the engine workspace at `manticore/engines/audio-lab` (a several-GB venv, ~340 MB of voice models now, ~5 GB of model cache on the first music or SFX run; on Windows with an NVIDIA GPU, torch comes from the PyTorch cu126 index and adds roughly 2.5 to 3 GB more; nothing downloads without your go-ahead). Full songs with vocals have no validated local lane yet, and paid audio lanes (ElevenLabs, Gemini TTS) are explicit opt-ins.
 
 ## 9. Your first video
 
@@ -143,7 +143,7 @@ Idea-first, the full pipeline:
 Footage-first, when the video already exists:
 
 1. Hand Manny the file ("cut this VOD", "make a video from this recording"). mc-new's ingest mode registers the source and writes a post-production stage list that starts at cut.
-2. The same gates apply from the cut stage onward: cut plan, beats with CTAs mined from the transcript, graphics, packaging with dual-timeline chapters, the final render offer.
+2. The same gates apply from the cut stage onward: cut plan, beats with CTAs mined from the transcript, graphics, packaging with dual-timeline chapters plus SRT/VTT captions and a publishable transcript, the final render offer.
 
 ## 10. Formats
 

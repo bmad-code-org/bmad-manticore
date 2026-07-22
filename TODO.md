@@ -6,7 +6,7 @@ State as of 2026-07-07, the 1.0.0 release. Read AGENTS.md first (module conventi
 
 - Per-episode stream packs and the Ecamm lane (the named 1.0.x fast-follow): mc-stream-pack gains a pre-show per-episode pack lane (topic popups, CTAs, lower thirds mined from the episode plan before the show, delivered as switchable scenes) with the two-tier asset rule (evergreen chrome once into series `common/`, topic graphics per episode). The `[live]` tool key (obs, ecamm, other) already ships and is interviewed at setup; the OBS lane keeps HTML browser sources and WebM stingers; the Ecamm/other lane delivers baked PNG / ProRes 4444 alpha scene stills and loops, a ProRes stinger, a countdown safe-zone spec with a --guides render, and a tool-specific HANDOFF.md. Ecamm Live is macOS-only. Scheduled-livestream packaging (mc-package live-event mode, two-asset thumbnail rule) rides along.
 - farm_asset.py metered API lane (xAI Imagine REST image ~$0.02 and video ~$0.05/s submit/poll/download; Veo 3.1 via the Gemini API as the escalation lane). Registered CLI tools are the only implemented farming lane in 1.0; the API lane ships opt-in only, never as a default.
-- resolve_import.py: push the exported timeline into a running DaVinci Resolve. Requires Resolve Studio (the scripting API is not in the free edition); the mc-cut offer stays gated on the script's implemented status. Native scripting remains the documented path; no MCP dependency.
+- resolve_import.py: push the exported timeline into a running DaVinci Resolve. External scripting requires Resolve Studio; free-edition users will run it from inside Resolve via the Fusion Scripts menu (the per-OS install paths are already documented in the mc-setup stack references and mc-ograf's resolve-workflow reference). The mc-cut offer stays gated on the script's implemented status. Native scripting remains the documented path; no MCP dependency.
 - HyperFrames engine workspace initialization at a pinned version on the first real graphics run (upstream is pre-1.0 and moves fast; v0.7.26 as of 2026-07-03).
 
 ## 1.x roadmap
@@ -42,10 +42,12 @@ What mc-audio does not cover yet (the shipped ladder, validation record, and lim
 
 - xmeml (Premiere Pro) and edl (CMX3600) export lanes alongside the implemented fcpxml exporter; OpenTimelineIO adapters are the likely implementation path. Until then Premiere users work from cutplan.md, edl.json, and the always-rendered preview/final.
 
-### Cross-platform transcription
+### Transcription: metered opt-in providers
 
-- A supported non-Apple-Silicon local lane. Today the documented fallbacks are whisper.cpp and faster-whisper (they normalize fillers away, so cut quality drops); parakeet-mlx stays the reference on Apple Silicon.
-- Metered API providers behind the same `[transcription]` switch if demand shows up, opt-in only: deepgram-nova3 (keyterm biasing), elevenlabs-scribe (same output shape as the parakeet lane).
+The cross-platform local lane landed (onnx-asr running the same parakeet-tdt-0.6b-v3 weights on Windows, Linux, and Intel Mac; see CHANGELOG Unreleased). What remains:
+
+- Metered API providers behind the same `[transcription]` switch if demand shows up, opt-in only: deepgram-nova3 (keyterm biasing), elevenlabs-scribe (same output shape as the parakeet lane). Also the documented cloud tier for non-European-language creators (Parakeet v3 covers 25 European languages).
+- Real-hardware validation of the onnx-asr lane on Windows and Linux (A/B against parakeet-mlx on identical audio comparing word text, starts, AND gap_before/gap_after values, since the onnx lane derives word ends from start-only timestamps and silence-based cutting rides on the gaps; CUDA escalation; chunk-boundary quality).
 
 ### Shorts karaoke captions
 

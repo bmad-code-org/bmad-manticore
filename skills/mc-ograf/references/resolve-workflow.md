@@ -28,4 +28,22 @@ Run `uv run scripts/verify_ograf.py <package-dir>` first — it reproduces #2 an
 
 ## Previewing locally before Resolve
 
-Serve the folder and open `preview.html` over HTTP — `python3 -m http.server` in the package folder, then open `localhost:<port>/preview.html`. **Never double-click `preview.html` (`file://`)**: the browser blocks its ES-module import and inlined data-URL assets, so the graphic silently fails while the controls/checkerboard still show ("Some content has been disabled"). This is a browser preview limit only; Resolve's renderer is unaffected.
+Serve the folder and open `preview.html` over HTTP: `uv run python -m http.server 8771` in the package folder, then open `localhost:<port>/preview.html` (verify_ograf.py prints per-OS steps and, from a human terminal, serves and opens the preview itself). **Never double-click `preview.html` (`file://`)**: the browser blocks its ES-module import and inlined data-URL assets, so the graphic silently fails while the controls/checkerboard still show ("Some content has been disabled"). This is a browser preview limit only; Resolve's renderer is unaffected.
+
+## Scripted import on free Resolve (Fusion Scripts menu)
+
+Resolve's external scripting API is Studio-only through Resolve 21; the free edition only executes scripts launched from inside the app (Console or Workspace > Scripts). To run the pipeline's scripted timeline import (resolve_import.py, once implemented) on free Resolve, copy the script into the Fusion Scripts folder and launch it from Workspace > Scripts:
+
+- macOS: `~/Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/Scripts/Utility/`
+- Windows: `%APPDATA%\Blackmagic Design\DaVinci Resolve\Support\Fusion\Scripts\Utility\`
+- Linux: `~/.local/share/DaVinciResolve/Fusion/Scripts/`
+
+This upgrades the free lane from manual FCPXML import to native scripted import with zero dependencies.
+
+## Linux free-edition codec caveat
+
+The Linux free edition cannot decode or encode H.264 or H.265 and has no AAC at all. The FCPXML timeline imports fine, but mp4/AAC media is undecodable there; transcode sources to ProRes or DNxHR first, or use Resolve Studio.
+
+## Studio power lane: Resolve MCP (opt-in)
+
+Studio users who want conversational post-import work (timeline surgery, Text+ titles, markers, render-queue automation) can opt into the community [samuelgursky/davinci-resolve-mcp](https://github.com/samuelgursky/davinci-resolve-mcp) server (MIT, macOS/Windows/Linux; Studio-only, because it uses the external scripting API). Manticore keeps doing media import and timeline construction itself through the FCPXML lane and never requires an MCP server; record an already-running server via mc-setup's `[mcp]` step if you want skills to use it.

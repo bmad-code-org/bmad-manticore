@@ -11,7 +11,10 @@ diffusers==0.31.0 + transformers==4.43.4; ensure_workspace.py installs it.
 
 Output is 16 kHz: fine for whooshes and ambience under a mix, thin when
 exposed solo; upsample/EQ or layer it. Validated 2026-07-07 on Apple
-Silicon MPS: 7 to 14 s per 4 s effect once cached.
+Silicon MPS: 7 to 14 s per 4 s effect once cached. Device ladder: cuda if
+available, else mps, else cpu (the CUDA branch is code-complete but awaits
+a validation run on real NVIDIA hardware). The generator stays on cpu for
+seed reproducibility.
 
 Args: --prompt, --out <wav>, --seconds (default 4), --seed (default 7),
 --steps (default 100), --negative (default quality guard).
@@ -45,7 +48,8 @@ def main() -> None:
 
     from diffusers import AudioLDM2Pipeline
 
-    device = "mps" if torch.backends.mps.is_available() else "cpu"
+    device = ("cuda" if torch.cuda.is_available()
+              else "mps" if torch.backends.mps.is_available() else "cpu")
     t0 = time.time()
     pipe = AudioLDM2Pipeline.from_pretrained(
         "cvssp/audioldm2", torch_dtype=torch.float32).to(device)

@@ -265,7 +265,7 @@
       <div class="roster" style="margin-top:14px;">
         <div class="rcard">
           <div class="rhead"><h3>Transcription</h3><span class="chip work">working</span></div>
-          <p><b>parakeet-mlx</b>: word-level, keeps the "um"s verbatim, free and local on Apple Silicon. deepgram-nova3 and elevenlabs-scribe sit behind the same switch as opt-in lanes.</p>
+          <p><b>parakeet-mlx</b> on Apple Silicon: word-level, keeps the "um"s verbatim, free and local. <b>onnx-asr</b> runs the same parakeet weights on Windows, Linux, and Intel Mac; that lane is code-complete but pending real-hardware validation, so treat a first run as a shakedown. deepgram-nova3 and elevenlabs-scribe sit behind the same switch as opt-in lanes.</p>
         </div>
         <div class="rcard">
           <div class="rhead"><h3>Image + video gen</h3><span class="chip opt">opt-in</span></div>
@@ -277,7 +277,7 @@
         </div>
         <div class="rcard">
           <div class="rhead"><h3>Rendering</h3><span class="chip work">working</span></div>
-          <p><b>ffmpeg</b> with hardware encode (videotoolbox on macOS, libx264 fallback), segment-parallel, disk-preflighted.</p>
+          <p><b>ffmpeg</b>, segment-parallel and disk-preflighted, with videotoolbox hardware encode on macOS; the final render is loudness-normalized to -14 LUFS. The Windows (nvenc, qsv, amf) and Linux (nvenc, vaapi) encoder ladders with libx264 fallback are code-complete, pending real-hardware validation.</p>
         </div>
         <div class="rcard">
           <div class="rhead"><h3>Graphics render</h3><span class="chip work">working</span></div>
@@ -508,7 +508,7 @@
           <rect x="858" y="42" width="252" height="104" rx="6" fill="#2B211A" stroke="#E0522F" stroke-width="2"/>
           <text x="984" y="76" text-anchor="middle" fill="#F5EBDC" font-size="16" font-weight="600">final render</text>
           <text x="984" y="96" text-anchor="middle" fill="#E0522F" font-size="11" font-weight="700">GATE 4, OFFERED</text>
-          <text x="984" y="112" text-anchor="middle" fill="#B39B7F" font-size="11">delivery res, hardware encode</text>
+          <text x="984" y="112" text-anchor="middle" fill="#B39B7F" font-size="11">delivery res, hw encode, -14 LUFS</text>
         </svg>
       </div>
       <p class="flow-cap">The <b>FCPXML timeline</b> exports on every cut approval (Resolve and Final Cut import it natively); xmeml (Premiere) and CMX3600 EDL are planned, so those users work from edl.json, cutplan.md, and the renders meanwhile. Same approved EDL, same composite core, so the preview you signed off on is exactly what the final bakes.</p>

@@ -9,6 +9,7 @@ Usage:
         [--meta PATH] [--pixfmt prores4444|yuva420p|<raw pix_fmt>]
         [--expect-dur SECONDS] [--expect-fps FPS] [--expect-res WxH]
         [--dur-tol SECONDS] [--frames 5] [--checker] [--out-dir PATH]
+        [--transcode-webm OUT.webm] [--webm-crf 30]
 
 Contract:
     input   a rendered MOV/WebM/mp4; every expectation arrives explicitly from
@@ -30,10 +31,20 @@ Contract:
             checkerboard when the file carries alpha, or when --checker is
             passed) into a _verify/ folder next to the input (or --out-dir)
             for visual inspection by the calling skill
+    webm    --transcode-webm OUT.webm first transcodes the input (normally the
+            ProRes 4444 alpha master) to a libvpx-vp9 yuva420p WebM at OUT (the
+            OBS browser-source / stinger deliverable), then runs every check
+            and frame extraction against OUT instead of the input; the pixfmt
+            expectation defaults to yuva420p in this mode when none is given;
+            hard errors (exit 2) when ffmpeg lacks the libvpx-vp9 encoder or
+            the input carries no alpha; --webm-crf tunes quality (default 30)
     output  structured JSON to stdout: probe summary, per-check
             expected/actual/pass, extracted frame paths; exit 0 when every
             check passes, exit 1 when any check fails, exit 2 on hard errors
-            (missing input, no video stream, missing ffprobe/ffmpeg)
+            (missing input, no video stream, missing ffprobe/ffmpeg,
+            failed or impossible WebM transcode); a failed yuva420p pixfmt
+            check on an alpha-less file carries a "hint" with the exact
+            re-render flags
     rule    a render is NOT done until frames have been extracted and visually
             checked (the self-QA loop: edit, lint, preview, draft render
             CRF 28, single-frame verify, final render)
@@ -117,6 +128,48 @@ def check_pixfmt(expected: str, stream: dict) -> bool:
     return pix_fmt == expected
 
 
+def pixfmt_hint(expected: str, stream: dict) -> str | None:
+    """A human-readable pointer for a failed pixfmt check, or None."""
+    if expected not in ("yuva420p", "prores4444") or has_alpha(stream):
+        return None
+    return (
+        "no alpha channel in this file; for a VP9 alpha WebM re-encode with "
+        "-c:v libvpx-vp9 -pix_fmt yuva420p -auto-alt-ref 0 from an alpha "
+        "master (ProRes 4444), or rerun this script with --transcode-webm"
+    )
+
+
+def encoder_available(name: str) -> bool:
+    r = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        return False
+    return any(line.split()[1:2] == [name] for line in r.stdout.splitlines()
+               if line.strip())
+
+
+def transcode_webm(src: Path, out: Path, stream: dict, crf: int) -> None:
+    """Transcode an alpha master to a libvpx-vp9 yuva420p WebM at out."""
+    if shutil.which("ffmpeg") is None:
+        die("ffmpeg not found on PATH")
+    if not has_alpha(stream):
+        die(f"input has no alpha channel ({stream.get('codec_name', '?')}/"
+            f"{stream.get('pix_fmt', '?')}); a VP9 alpha WebM must be "
+            "transcoded from an alpha master such as ProRes 4444")
+    if not encoder_available("libvpx-vp9"):
+        die("this ffmpeg build has no libvpx-vp9 encoder; install a full "
+            "ffmpeg build (brew/apt/winget builds include it) to produce the "
+            "VP9 alpha WebM deliverable")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(src),
+           "-c:v", "libvpx-vp9", "-pix_fmt", "yuva420p",
+           "-auto-alt-ref", "0", "-b:v", "0", "-crf", str(crf),
+           "-row-mt", "1", "-c:a", "libopus", str(out)]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0 or not out.is_file():
+        die(f"VP9 WebM transcode failed: {r.stderr.strip()}")
+
+
 def extract_frames(path: Path, out_dir: Path, count: int, duration: float | None,
                    width: int, height: int, checker: bool) -> list[str]:
     if shutil.which("ffmpeg") is None:
@@ -177,6 +230,11 @@ def main() -> None:
     p.add_argument("--checker", action="store_true",
                    help="force checkerboard compositing (automatic for alpha files)")
     p.add_argument("--out-dir", help="frame output folder (default: _verify/ next to the input)")
+    p.add_argument("--transcode-webm", metavar="OUT.webm",
+                   help="transcode the input (alpha master) to a libvpx-vp9 "
+                        "yuva420p WebM at OUT, then verify OUT instead")
+    p.add_argument("--webm-crf", type=int, default=30,
+                   help="CRF for the VP9 WebM transcode (default 30)")
     args = p.parse_args()
 
     path = Path(args.input)
@@ -211,6 +269,20 @@ def main() -> None:
     stream = streams[0]
     fmt = data.get("format", {})
 
+    transcoded = None
+    if args.transcode_webm:
+        webm_out = Path(args.transcode_webm)
+        transcode_webm(path, webm_out, stream, args.webm_crf)
+        transcoded = str(webm_out)
+        path = webm_out
+        data = probe(path)
+        streams = [s for s in data.get("streams", []) if s.get("codec_type") == "video"]
+        if not streams:
+            die(f"no video stream in transcoded {path}")
+        stream = streams[0]
+        fmt = data.get("format", {})
+        expect.setdefault("pixfmt", "yuva420p")
+
     width = int(stream.get("width", 0))
     height = int(stream.get("height", 0))
     fps = parse_fps(stream)
@@ -219,11 +291,16 @@ def main() -> None:
 
     checks: dict = {}
     if "pixfmt" in expect:
+        pf_pass = check_pixfmt(str(expect["pixfmt"]), stream)
         checks["pixfmt"] = {
             "expected": str(expect["pixfmt"]),
             "actual": f"{stream.get('codec_name', '?')}/{stream.get('pix_fmt', '?')}",
-            "pass": check_pixfmt(str(expect["pixfmt"]), stream),
+            "pass": pf_pass,
         }
+        if not pf_pass:
+            hint = pixfmt_hint(str(expect["pixfmt"]), stream)
+            if hint:
+                checks["pixfmt"]["hint"] = hint
     if "res" in expect:
         try:
             ew, eh = (int(v) for v in str(expect["res"]).lower().split("x"))
@@ -249,6 +326,7 @@ def main() -> None:
     print(json.dumps({
         "ok": ok,
         "input": str(path),
+        "transcoded": transcoded,
         "probe": {"codec": stream.get("codec_name"), "pix_fmt": stream.get("pix_fmt"),
                   "width": width, "height": height, "fps": fps,
                   "duration": duration, "alpha": alpha},
