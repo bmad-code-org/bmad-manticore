@@ -88,11 +88,14 @@ def gpu_names_linux() -> list[str] | None:
 
 
 def gpu_names_windows() -> list[str] | None:
-    """Best-effort adapter names via wmic or PowerShell CIM; None on failure."""
+    """Best-effort adapter names via PowerShell CIM or legacy wmic; None on failure.
+
+    PowerShell first: wmic is disabled by default on Windows 11 23H2+ and is
+    being removed, so it is only a fallback for older installs."""
     commands = [
-        ["wmic", "path", "win32_VideoController", "get", "name"],
         ["powershell", "-NoProfile", "-Command",
          "Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name"],
+        ["wmic", "path", "win32_VideoController", "get", "name"],
     ]
     for cmd in commands:
         if not shutil.which(cmd[0]):

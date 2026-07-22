@@ -82,13 +82,13 @@ def manual_verify_steps(pkg: Path, system: str | None = None) -> list[str]:
     system = system or platform.system()
     url = "http://localhost:8771/preview.html"
     if system == "Windows":
-        cd_cmd = f"cd /d {pkg}"
+        cd_cmd = f'cd /d "{pkg}"'
         open_cmd = f"start {url}"
     elif system == "Darwin":
-        cd_cmd = f"cd {pkg}"
+        cd_cmd = f'cd "{pkg}"'
         open_cmd = f"open {url}"
     else:
-        cd_cmd = f"cd {pkg}"
+        cd_cmd = f'cd "{pkg}"'
         open_cmd = f"xdg-open {url}"
     return [
         f"In a terminal, change into the package: {cd_cmd}",
