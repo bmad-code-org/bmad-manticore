@@ -44,7 +44,7 @@ brand-path = "manticore/brand"
 formats-path = "manticore/formats"
 # projects-path holds one folder per video.
 projects-path = "manticore/projects"
-# engines-path holds your HyperFrames/Remotion/OGraf engine workspaces.
+# engines-path holds your HyperFrames/OGraf engine workspaces.
 engines-path = "manticore/engines"
 
 [defaults.video]

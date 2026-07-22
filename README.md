@@ -54,7 +54,7 @@ my-studio/                        <- install here, run everything from here
                    exemplars/, headshots/
     formats/    <- your editable format profiles (learnings accumulate here)
     projects/   <- one folder per video, fully self-contained
-    engines/    <- HyperFrames / Remotion workspaces
+    engines/    <- HyperFrames / OGraf workspaces
 ```
 
 Then say "talk to Manny". Manny the Manticore (mc-agent) is the studio's director and front door: he detects that the studio is not set up yet and walks you through mc-setup's onboarding interview (identity, editor, render consent, video style, brand, headshots, voice bible, tools), turns your first idea into a project, routes existing footage into a footage-first project, and drives every stage from there. You never have to know which skill does what.
@@ -89,7 +89,7 @@ Manticore orchestrates tools; it does not replace them. The defaults are local a
 | parakeet-mlx / onnx-asr | Word-level cutting transcripts with verbatim fillers (the "um"s are exactly what gets cut); parakeet-mlx on Apple Silicon, onnx-asr running the same parakeet-tdt-0.6b-v3 weights on Windows, Linux, and Intel Mac | Free, runs locally, no API key |
 | Kokoro-82M (kokoro-onnx) | TTS narration and two-host dialogue for the mc-audio lane (stock voices, no cloning) | Free, local, faster than realtime on CPU |
 | MusicGen-small + AudioLDM2 | Instrumental music beds and SFX, farmed locally by mc-audio | Free, local, ungated models |
-| HyperFrames and Remotion | Motion graphics engines for overlay beats, stingers, and karaoke captions | Free (Remotion is free for companies up to 3 people) |
+| HyperFrames | Motion graphics engine for overlay beats, stingers, and karaoke captions | Free, local, Apache 2.0, no commercial-use threshold |
 | OGraf + SPX-GC / OBS | Broadcast graphics that stay editable in DaVinci Resolve 21+ and click-to-trigger live in OBS | Free |
 | yt-dlp | Pulls your back-catalog transcripts to build your voice bible | Free |
 | Grok CLI (xAI), opt-in | Imagine stills and image-to-video b-roll clips with native audio, plus X/Twitter research and posting, from the terminal | Covered by a SuperGrok / X Premium+ subscription; a metered xAI API lane exists only as an explicit opt-in |
@@ -129,7 +129,7 @@ Seven ship by default: talking-head, screen-tutorial (real UI only, generated b-
 | mc-script | Weave the script from your words; lint; craft QA |
 | mc-cut | Word-level transcript, cut plan with taste calls (gate 2), edl.json, preview render every iteration, timeline export, the offered final render |
 | mc-beats | The graphics beat table anchored to spoken words, under creativity mandates and your density tier, with a CTA placement pass (gate 3) |
-| mc-graphics | Execute beats in HyperFrames / Remotion / HTML / design-prompting; frame-verified alpha overlays |
+| mc-graphics | Execute beats in HyperFrames / HTML / design-prompting; frame-verified alpha overlays |
 | mc-ograf | Editable broadcast graphics (DaVinci Resolve 21+ and OBS/SPX-GC) |
 | mc-assets | Farm b-roll stills/clips via your registered CLI tools (metered APIs opt-in), under generative-editing safety rules |
 | mc-audio | Farm sound, local-first: TTS narration and two-host dialogue (Kokoro-82M), instrumental beds (MusicGen-small), SFX (AudioLDM2); paid lanes opt-in |

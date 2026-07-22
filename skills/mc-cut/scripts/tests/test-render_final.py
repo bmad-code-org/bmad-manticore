@@ -56,7 +56,7 @@ BEATS_MD = """# Beats
 | id | start | dur | end | anchor word | anchor ts | spoken phrase | type | engine | asset | composition |
 |---|---|---|---|---|---|---|---|---|---|---|
 | b1 | 0:02 | 3 | 0:05 | alpha | 0:02 | "alpha beta" | overlay | html | null | keyword callout |
-| b2 | 12.5 | 2.5 |  | gamma | 12.5 | "gamma" | cta | remotion | cta-card | subscribe |
+| b2 | 12.5 | 2.5 |  | gamma | 12.5 | "gamma" | cta | hyperframes | cta-card | subscribe |
 | b3 | 30 |  | 34 | delta | 30 | "delta" |  |  |  | legacy 0.x row |
 | bad | oops | 2 |  | x | 0 | "x" | overlay |  |  | broken start |
 | b4 | 40 |  |  | x | 40 | "x" | overlay |  |  | no dur or end |

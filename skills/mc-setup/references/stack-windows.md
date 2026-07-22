@@ -34,7 +34,7 @@ Same as above except:
 
 ## Windows notes
 
-- Keep `{engines-path}` short. Deep Node engine workspaces (HyperFrames, Remotion) can trip MAX_PATH; also enable LongPathsEnabled in the registry.
+- Keep `{engines-path}` short. Deep Node engine workspaces (HyperFrames) can trip MAX_PATH; also enable LongPathsEnabled in the registry.
 - Install the gyan.dev full ffmpeg build; it carries libx264, prores_ks, libvpx-vp9, and drawtext with freetype/fontconfig.
 - Screen recording goes through OBS, not Game Bar (single-app only, no Desktop or Explorer capture).
 - Registered CLI tools installed via npm run through `.cmd` shims; the pipeline resolves them with PATH lookup before launching. Headless templates use POSIX quoting.

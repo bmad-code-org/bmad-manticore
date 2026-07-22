@@ -24,7 +24,7 @@ my-studio/                        <- install here, run everything from here
     projects/                     <- one folder per video, fully self-contained
       my-first-video/
       another-video/
-    engines/                      <- HyperFrames / Remotion workspaces
+    engines/                      <- HyperFrames / OGraf workspaces
 ```
 
 Install:

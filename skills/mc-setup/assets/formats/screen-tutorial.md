@@ -2,7 +2,7 @@
 format: screen-tutorial
 stages: [new, braindump, outline, script, record, cut, beats, graphics, package, final, retro]
 engine_overlays: hyperframes
-engine_stingers: remotion
+engine_stingers: hyperframes
 generated_broll: banned
 beat-types: [lower-third, title-card, keyword-pop, list-build, diagram, zoom-pan, ui-callout, key-press-chip, step-counter, cta]
 density:

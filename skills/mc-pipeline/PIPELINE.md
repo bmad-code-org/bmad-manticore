@@ -88,11 +88,11 @@ If the config exists but a key this stage needs is missing or empty, ask for jus
 
 ## Engine policy
 
-- HyperFrames: default for per-video overlay beats. Registry blocks before authoring (`npx hyperframes add`). Export overlay-only ProRes 4444 MOV with alpha.
-- Remotion: stingers and transitions (dual render: VP9 alpha WebM for OBS + ProRes 4444 for the editor timeline lane), React-stateful graphics, shorts karaoke captions. Free for companies of up to 3 people; larger teams need a Remotion license.
+- HyperFrames: the graphics engine. Per-video overlay beats, stingers and transitions (dual render: VP9 alpha WebM for OBS + ProRes 4444 for the editor timeline lane), and shorts karaoke captions. Registry blocks before authoring (`npx hyperframes add`). Export overlay-only ProRes 4444 MOV with alpha. Apache 2.0, local, no commercial-use threshold.
 - OGraf (the mc-ograf skill): ONLY when the target supports it. Editor lane requires `[editor] ograf-editable = true` (DaVinci Resolve 21+); the live lane (OBS/SPX-GC via mc-stream-pack) is editor-independent. Everyone else gets baked alpha MOVs, which work in every editor.
 - Everything is themed through `{brand-path}/tokens.json`. Component sourcing rule: registries and open libraries first, author from scratch only when nothing fits.
-- Engine workspaces (the pinned HyperFrames project, the Remotion project) live at `{engines-path}`; mc-setup or the first graphics run initializes them.
+- Engine workspaces (the pinned HyperFrames project) live at `{engines-path}`; mc-setup or the first graphics run initializes them.
+- Remotion was a second engine through 0.x and was removed on 2026-07-22: its license is free only up to 3 people, and its React authoring model bought nothing in a frame-deterministic renderer. Rationale in `mc-graphics/engines/hyperframes.md`.
 
 ## The beat table (engine-neutral graphics contract)
 
@@ -104,9 +104,9 @@ One row per graphic beat, produced by mc-beats, consumed by mc-graphics and mc-a
 Column rules:
 
 - `type` is a beat type from the format profile's `beat-types` frontmatter list (e.g. `lower-third`, `diagram`, `stat-card`, `cta`); the profile is the single type vocabulary for its format. The reserved placeholder `overlay` is legal only when reading legacy tables (tolerance rule below) and is never written.
-- `engine` names the engine that renders the beat, per the Engine policy below (e.g. `hyperframes`, `remotion`, `ograf`, `html`).
+- `engine` names the engine that renders the beat, per the Engine policy below (e.g. `hyperframes`, `ograf`, `html`).
 - `asset` is `null` or a farmed-asset id from `assets/manifest.json`; mc-assets farms the listed assets, mc-graphics composes with them.
-- Tolerance rule: consumers MUST accept rows missing `type`, `engine`, or `asset` (beat tables written by 0.x projects). Treat a missing `type` as the reserved placeholder `overlay` (informational only; rendering keys off `engine` and `composition`), a missing `engine` as the Engine policy default, and a missing `asset` as `null`. A stage that rewrites the table (mc-beats) replaces every `overlay` placeholder with a type from the profile's `beat-types`. An in-flight 0.x project never breaks on the extended contract.
+- Tolerance rule: consumers MUST accept rows missing `type`, `engine`, or `asset` (beat tables written by 0.x projects). Treat a missing `type` as the reserved placeholder `overlay` (informational only; rendering keys off `engine` and `composition`), a missing `engine` as the Engine policy default, an `engine` of `remotion` (written by 0.x projects) as `hyperframes`, and a missing `asset` as `null`. A stage that rewrites the table (mc-beats) replaces every `overlay` placeholder with a type from the profile's `beat-types`. An in-flight 0.x project never breaks on the extended contract.
 
 Anchors are measured against the EDITED timeline defined by `cut/edl.json`, not the raw take.
 

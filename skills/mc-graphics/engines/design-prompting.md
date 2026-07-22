@@ -4,11 +4,11 @@ The authoring path when no registry block or brand template fits a beat: hand th
 
 ## The core rule
 
-Design surfaces handle look and iteration, but pixels always come from deterministic frame-stepped rendering (Remotion render, or headless-Chrome frame stepping plus ffmpeg to ProRes 4444 alpha), never realtime screen recording.
+Design surfaces handle look and iteration, but pixels always come from deterministic frame-stepped rendering (HyperFrames render, or headless-Chrome frame stepping plus ffmpeg to ProRes 4444 alpha), never realtime screen recording.
 
 Realtime capture gives no alpha channel, a variable frame rate, and dropped frames. Every deliverable render walks frames deterministically:
 
-- Remotion path: `npx remotion render` with `--codec prores --prores-profile 4444 --pixel-format yuva444p10le` for the editor lane, and a second render with `--codec vp9 --pixel-format yuva420p` for the OBS/live lane. One comp, two renders, never two source comps.
+- HyperFrames path: `npx hyperframes render` to ProRes 4444 (yuva444p10le) MOV for the editor lane, and a second render of the same comp to VP9 (yuva420p) WebM for the OBS/live lane. One comp, two renders, never two source comps.
 - HTML path: a headless-Chrome harness seeks the animation to frame N, screenshots with a transparent background (`omitBackground: true` gives PNG alpha), then `ffmpeg -framerate {fps} -i frame_%05d.png -c:v prores_ks -profile:v 4444 -pix_fmt yuva444p10le overlay.mov`.
 
 A design surface's live preview, a hosted review page, and any screen recording are review surfaces only, never deliverables.
@@ -22,7 +22,7 @@ Designs authored in a chat or design surface default to wall-clock CSS animation
 - No unseeded randomness. Identical frame in, identical pixels out (render a frame twice and byte-compare to verify).
 - Signal readiness: resolve `document.fonts.ready` before the first frame is captured.
 
-For Remotion beats the contract is instead: composition with explicit `durationInFrames` and `fps`, all motion derived from `useCurrentFrame()`, no `Math.random` without Remotion's seeded `random()`.
+HyperFrames beats satisfy the same contract natively: the comp is plain HTML/CSS plus a GSAP timeline created with `{ paused: true }` and registered on `window.__timelines`, which the renderer seeks per frame. Declare fps and duration in the comp's render config rather than inferring them.
 
 ## The design brief
 
@@ -82,7 +82,7 @@ Sources for the brief: the approved beat row (timing, anchor, composition), the 
 ## The iterate loop
 
 1. Brief: generate the brief file from the beat row, tokens, and the Production Bible.
-2. Propose: the design model produces a candidate comp (self-contained HTML honoring the seek contract, or a Remotion comp when React-stateful).
+2. Propose: the design model produces a candidate comp (self-contained HTML honoring the seek contract, authored directly as a HyperFrames comp when it is headed for the engine workspace).
 3. Render one frame: seek to the anchor frame and render it. Cheap, fast, and catches most misses before any video render.
 4. Critique against the bible: check the frame against the Production Bible's aesthetic language, the safe zones, the verbatim text, and alpha over checkerboard. Revise and repeat.
 5. Review with the creator: the review surface may be a hosted page (a Claude Artifact is the worked example) showing the animation looping, a scrub slider driving the same `seek(frame)` the renderer will use, a checkerboard toggle to prove alpha, and a composite over a still frame extracted from the actual footage at the beat's start time so safe zones are checked against reality. The creator gives frame-referenced notes ("at 0:00.8 the underline overshoots"); each note feeds the next revision of the local source file, which stays the single source of truth.
@@ -93,7 +93,6 @@ Sources for the brief: the approved beat row (timing, anchor, composition), the 
 Once the creator approves the look, it becomes durable engine code rather than a one-off:
 
 - HyperFrames: port the comp into a themed block in the HyperFrames workspace, all colors and fonts read from tokens, timing parameterized so the block can be reused at other durations.
-- Remotion: promote the comp into the Remotion workspace with `durationInFrames` and `fps` as props and all motion from `useCurrentFrame()`.
 - OGraf: only when the target supports it (editor lane per `[editor] ograf-editable`, always for the live lane); rebuild the approved look as an OGraf graphic via mc-ograf rather than wrapping the HTML.
 - Foreign HTML (exported from a design surface) is sanitized before entering a workspace: strip or inline every external reference, replace hardcoded colors and fonts with token references (a grep for hex literals not present in tokens is the lint), retrofit the seek contract, and double-render a frame to verify determinism.
 - Record promoted blocks in the format profile's Templates section so future beats assemble them instead of redesigning.
@@ -186,12 +185,12 @@ to the cut.
 anchor k; SVG-based so strokes stay crisp at 4K>
 ```
 
-### Example 3: cold-open title stinger (Remotion, dual render)
+### Example 3: cold-open title stinger (HyperFrames, dual render)
 
 Transcript moment: the approved hook line opens the video; the stinger also serves as the live scene transition.
 
 ```markdown
-# Design brief: b00-title-stinger (engine: Remotion)
+# Design brief: b00-title-stinger (engine: HyperFrames)
 
 ## Beat
 
@@ -217,8 +216,9 @@ title as it tracks in; everything exits with a fast upward wipe in the
 last 12 frames so the footage is revealed clean.
 ## Determinism contract
 
-Remotion composition, durationInFrames=48, fps=30; all motion from
-useCurrentFrame() via interpolate/spring; no unseeded randomness.
+HyperFrames comp, 48 frames at 30fps; one GSAP timeline created
+{ paused: true } and registered on window.__timelines; no unseeded
+randomness.
 ## Deliverables
 
 ONE comp, TWO renders: ProRes 4444 (yuva444p10le) MOV for the editor,

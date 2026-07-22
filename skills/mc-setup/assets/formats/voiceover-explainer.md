@@ -2,7 +2,7 @@
 format: voiceover-explainer
 stages: [new, braindump, outline, script, record, cut, beats, graphics, assets, package, final, retro]
 engine_overlays: hyperframes
-engine_stingers: remotion
+engine_stingers: hyperframes
 generated_broll: allowed
 beat-types: [slide, diagram, list-build, keyword-pop, quote-card, stat-card, farmed-still, farmed-clip, screenshot, cta]
 density:
@@ -27,7 +27,7 @@ Narration status: creator-recorded narration is the default and the honest recom
 
 ## Engine defaults
 
-- Diagrams and slides: HyperFrames or plain HTML/SVG comps in Remotion (the creator's call per video; both read `{brand-path}/tokens.json`).
+- Diagrams and slides: HyperFrames blocks or plain HTML/SVG comps (the creator's call per video; both read `{brand-path}/tokens.json`).
 - Farmed stills/clips: per the configured `[assets]` lanes and the `PIPELINE.md` engine policy. No vendor is assumed; if a lane is unset, the assets stage stops and asks.
 
 ## Templates

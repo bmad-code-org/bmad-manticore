@@ -1,7 +1,7 @@
 ---
 format: short
 stages: [new, cut, beats, graphics, package, final, retro]
-engine_overlays: remotion
+engine_overlays: hyperframes
 engine_stingers: none
 generated_broll: allowed
 beat-types: [karaoke-caption, hook-text, keyword-pop, screenshot-callout, cta]
@@ -26,7 +26,7 @@ density:
 
 ## Engine defaults
 
-- Captions and overlays: the Remotion karaoke caption system, safe-area aware for the vertical UI chrome.
+- Captions and overlays: the HyperFrames karaoke caption system, safe-area aware for the vertical UI chrome.
 - Source: the parent project's `cut/edl.json` and transcript; a short's own edl selects and reorders parent segments.
 
 ## Templates

@@ -13,7 +13,7 @@ The outcome is a FOLDER (`*.ograf.json` manifest + Web Component `.mjs` + assets
 
 1. Load the studio config (`uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {project-root} --key modules.manticore`; empty means mc-setup has not run: stop and route the creator there) and this skill's own surface (`uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root}`; run `{workflow.activation_steps_prepend}` now, `{workflow.activation_steps_append}` after this step, and hold `{workflow.persistent_facts}` as standing context). Resolve `paths` values against `{project-root}`.
 2. OGraf is only the right output when the target supports it:
-   - Editor lane: `[editor] ograf-editable = true` (DaVinci Resolve 21+). If false, STOP and say so; the same graphic should be built as a baked alpha overlay by mc-graphics instead (HyperFrames/Remotion work in every editor).
+   - Editor lane: `[editor] ograf-editable = true` (DaVinci Resolve 21+). If false, STOP and say so; the same graphic should be built as a baked alpha overlay by mc-graphics instead (baked HyperFrames alpha works in every editor).
    - Live lane: OBS/SPX-GC stream graphics (mc-stream-pack). Editor-independent; always allowed.
 
 ## Design the graphic

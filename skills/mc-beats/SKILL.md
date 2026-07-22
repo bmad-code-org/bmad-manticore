@@ -35,7 +35,7 @@ The table follows PIPELINE.md's engine-neutral contract, one row per beat:
 |---|---|---|---|---|---|---|---|---|---|---|
 
 - `type` is one of the format profile's `beat-types` (the frontmatter list is the whole vocabulary for the format). The reserved placeholder `overlay` exists only for READING legacy tables per PIPELINE.md's tolerance rule; mc-beats never writes it.
-- `engine` names the rendering engine per the engine policy (e.g. `hyperframes`, `remotion`, `ograf`, `html`).
+- `engine` names the rendering engine per the engine policy (e.g. `hyperframes`, `ograf`, `html`).
 - `asset` is `null` or a farmed-asset id for mc-assets.
 - mc-beats always writes every column. When revising a legacy 0.x table that lacks the extended columns, apply PIPELINE.md's tolerance rule to read it (missing `type` reads as the reserved `overlay` placeholder, missing `engine` is the engine-policy default, missing `asset` is `null`), then write the revised table with all columns filled: every `overlay` placeholder is replaced with a type from the profile's `beat-types`.
 

@@ -2,7 +2,7 @@
 format: talking-head
 stages: [new, braindump, outline, script, record, cut, beats, graphics, assets, package, final, retro]
 engine_overlays: hyperframes
-engine_stingers: remotion
+engine_stingers: hyperframes
 generated_broll: allowed
 beat-types: [lower-third, title-card, keyword-pop, quote-card, list-build, stat-card, diagram, screenshot-callout, b-roll, cta]
 density:
@@ -27,7 +27,7 @@ The default for main channel videos. The creator on camera, graphics are overlay
 ## Engine defaults
 
 - Overlays: HyperFrames, registry blocks first, ProRes 4444 alpha export.
-- Stinger/transition: the Remotion brand stinger from `{engines-path}/remotion/`.
+- Stinger/transition: the HyperFrames brand stinger from `{engines-path}/hyperframes/`.
 - Generated b-roll: allowed for atmosphere and story beats only, never for UI or text that must be accurate.
 
 ## Templates

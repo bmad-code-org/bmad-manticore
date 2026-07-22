@@ -2,7 +2,7 @@
 
 All notable changes to BMad Manticore are documented here. Dates are ISO (YYYY-MM-DD).
 
-## Unreleased
+## 1.1.0 - Unreleased
 
 ### Cross-platform: Windows, Linux, and Intel Mac lanes (code-complete, pending real-hardware validation)
 
@@ -11,6 +11,10 @@ All notable changes to BMad Manticore are documented here. Dates are ISO (YYYY-M
 - Hardware encoder ladders: the final render and the VFR remux pick per-OS hardware encoders validated by a real one-frame test encode (Windows: h264_nvenc, then h264_qsv, then h264_amf; Linux: h264_nvenc, then h264_vaapi wired end to end with hwupload; libx264 fallback everywhere). The preview render, plain and graphics-composited alike, stays libx264 crf 28 veryfast by design on every OS. macOS videotoolbox behavior is byte-for-byte unchanged.
 - mc-audio portability: the audio-lab venv interpreter resolves per OS (.venv/bin/python vs .venv\Scripts\python.exe), Windows machines with an NVIDIA GPU install torch from the PyTorch cu126 index (roughly 2.5 to 3 GB extra, surfaced in the consent message and the `--dry-run` torch field), and MusicGen/AudioLDM2 pick cuda, then mps, then cpu. macOS behavior is unchanged.
 - Small portability fixes: edl_to_fcpxml.py emits valid Windows file URIs (file:///C:/... and UNC shares) via Path.as_uri() with byte-identical POSIX output; farm_asset.py resolves registered tools with a PATH lookup (Windows npm .cmd/.exe shims launch by bare name), documents POSIX quoting for headless templates on every OS, and refuses to pass arguments containing cmd.exe metacharacters (embedded double quotes, % ^ & | < >) to a .cmd/.bat shim, failing loudly with a re-register hint instead of letting cmd.exe corrupt or expand them; verify_ograf.py prints per-OS manual verification steps and, from a human terminal, serves the package and opens preview.html in the default browser itself. transcribe.py, edl_to_fcpxml.py, and render_final.py read and write their JSON, FCPXML, and concat-list artifacts with explicit UTF-8 so non-ASCII transcripts and paths survive on Windows locale codecs (cp1252).
+
+### Changed
+
+- Remotion is removed; HyperFrames is the module's single motion-graphics engine. Two reasons: Remotion's license is free only for companies of up to 3 people and Manticore is a distributed module, so shipping it handed every creator at a 4+ person company a licensing obligation they never opted into; and its remaining justification ("anything React-stateful") bought nothing in a frame-deterministic renderer, where state is a function of frame index. Every job Remotion held (the dual-render brand stinger, shorts karaoke captions, plain HTML/SVG comps) is a paused GSAP timeline in HyperFrames, which encodes alpha to both ProRes 4444 MOV and VP9 yuva420p WebM, so the OBS-plus-editor dual target is unchanged. The `engine_stingers`/`engine_overlays` profile keys now read `hyperframes` where they read `remotion`, `skills/mc-graphics/engines/remotion.md` is deleted, and the rationale lives in `skills/mc-graphics/engines/hyperframes.md`. Beat tables from 0.x carrying `engine: remotion` are read as `hyperframes` under the PIPELINE.md tolerance rule, so in-flight projects do not break. OGraf is unaffected; it solves a different problem (Resolve-editable and SPX-GC live).
 
 ### Added
 

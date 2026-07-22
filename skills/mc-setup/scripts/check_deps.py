@@ -33,7 +33,7 @@ DEPS = [
     ("uv", True, "runs every pipeline script (installs Python automatically if needed)"),
     ("ffmpeg", True, "frame extraction, re-mux to constant frame rate, preview renders"),
     ("ffprobe", True, "frame-rate and pixel-format verification"),
-    ("node", True, "HyperFrames and Remotion render engines"),
+    ("node", True, "HyperFrames render engine"),
     ("npx", True, "hyperframes CLI and registry blocks"),
     ("git", True, "project history"),
     ("yt-dlp", False, "pulling your published transcripts for the voice bible"),

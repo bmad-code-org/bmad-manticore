@@ -7,7 +7,7 @@ State as of 2026-07-07, the 1.0.0 release. Read AGENTS.md first (module conventi
 - Per-episode stream packs and the Ecamm lane (the named 1.0.x fast-follow): mc-stream-pack gains a pre-show per-episode pack lane (topic popups, CTAs, lower thirds mined from the episode plan before the show, delivered as switchable scenes) with the two-tier asset rule (evergreen chrome once into series `common/`, topic graphics per episode). The `[live]` tool key (obs, ecamm, other) already ships and is interviewed at setup; the OBS lane keeps HTML browser sources and WebM stingers; the Ecamm/other lane delivers baked PNG / ProRes 4444 alpha scene stills and loops, a ProRes stinger, a countdown safe-zone spec with a --guides render, and a tool-specific HANDOFF.md. Ecamm Live is macOS-only. Scheduled-livestream packaging (mc-package live-event mode, two-asset thumbnail rule) rides along.
 - farm_asset.py metered API lane (xAI Imagine REST image ~$0.02 and video ~$0.05/s submit/poll/download; Veo 3.1 via the Gemini API as the escalation lane). Registered CLI tools are the only implemented farming lane in 1.0; the API lane ships opt-in only, never as a default.
 - resolve_import.py: push the exported timeline into a running DaVinci Resolve. External scripting requires Resolve Studio; free-edition users will run it from inside Resolve via the Fusion Scripts menu (the per-OS install paths are already documented in the mc-setup stack references and mc-ograf's resolve-workflow reference). The mc-cut offer stays gated on the script's implemented status. Native scripting remains the documented path; no MCP dependency.
-- HyperFrames engine workspace initialization at a pinned version on the first real graphics run (upstream is pre-1.0 and moves fast; v0.7.26 as of 2026-07-03).
+- HyperFrames engine workspace initialization on the first real graphics run: install `hyperframes@latest` at that moment and record the resolved version in the workspace package.json (upstream is pre-1.0 and moves fast, so never ship a pin from this repo).
 
 ## 1.x roadmap
 
@@ -51,7 +51,7 @@ The cross-platform local lane landed (onnx-asr running the same parakeet-tdt-0.6
 
 ### Shorts karaoke captions
 
-- Word-level karaoke caption system for the short format, built on Remotion, driven by the same word timestamps the cut lane already produces.
+- Word-level karaoke caption system for the short format, built on HyperFrames, driven by the same word timestamps the cut lane already produces.
 
 ### Decks and whiteboards
 
