@@ -34,7 +34,7 @@ DEPS = [
     ("ffmpeg", True, "frame extraction, re-mux to constant frame rate, preview renders"),
     ("ffprobe", True, "frame-rate and pixel-format verification"),
     ("node", True, "HyperFrames render engine"),
-    ("npx", True, "hyperframes CLI and registry blocks"),
+    ("npx", True, "hyperframes CLI, skills, and catalog blocks"),
     ("git", True, "project history"),
     ("yt-dlp", False, "pulling your published transcripts for the voice bible"),
 ]
