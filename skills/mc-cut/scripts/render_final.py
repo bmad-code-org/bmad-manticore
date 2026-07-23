@@ -9,6 +9,7 @@ Usage:
     uv run {skill-root}/scripts/render_final.py <edl.json> -o renders/final.mp4 \
         [--project-dir <dir>] [--beats beats/beats.md --graphics-dir graphics/] \
         [--codec auto] [--crf 18] [--height <H>] [--parallel 2] \
+        [--segment-target-seconds 600] [--no-cache] \
         [--loudness-target -14] [--no-loudnorm] \
         [--boundary-frames <dir>] [--skip-disk-check] [--keep-temp]
 
@@ -19,6 +20,12 @@ Purpose:
     render_preview.py, so the composited preview the creator iterated on is
     exactly what the final bakes.
 
+    Incremental: the timeline is partitioned into persistent, content-addressed
+    render segments under renders/segments/, so a re-render only re-encodes the
+    segments whose inputs actually changed (a tweaked graphic, a re-cut region)
+    and reuses the rest from cache. Changing one overlay on a two-hour video is
+    a seconds-long re-render, not a full one.
+
 Contract:
     input    edl.json {source, fade_ms, pad_ms, segments[]} (seconds against
              each segment's source). Optional --beats beats/beats.md (the
@@ -27,13 +34,27 @@ Contract:
              beat id (<id>.mov ProRes 4444 alpha, or .webm/.mp4/.mkv/.png).
              Beats without a matching file are listed in the summary as
              overlays_missing, never fatal.
-    output   an H.264 (or HEVC) mp4 at -o. The timeline is split into up to
-             --parallel chunks at internal cut boundaries that avoid every
-             overlay window; each chunk renders in its own ffmpeg process to
-             an MPEG-TS intermediate beside the output, then the chunks are
-             losslessly concatenated (concat demuxer, -c copy,
-             aac_adtstoasc, +faststart). Intermediates are removed unless
-             --keep-temp.
+    output   an H.264 (or HEVC) mp4 at -o. The timeline is partitioned into
+             render segments with STABLE, sticky boundaries: greedy left to
+             right to --segment-target-seconds (default 600 = 10 min), each
+             snapped to the next safe cut that no overlay spans, so an edit
+             cannot move an earlier boundary. Each segment is content-addressed
+             by a hash of its inputs (its EDL slice, the digest of every source
+             and overlay file it consumes, and the resolved render identity)
+             and persisted VIDEO-ONLY to renders/segments/<id>.ts. On each
+             render only the segments whose hash changed (or all of them when
+             the encoder/ffmpeg/dimensions change, since a mixed-encoder concat
+             is invalid) are re-encoded, via a bounded pool of --parallel
+             workers, each to a temp renamed into place only on success; the
+             rest are reused. The video segments are then losslessly
+             concatenated (concat demuxer, -c copy, +faststart) and the
+             whole-program audio, rebuilt fresh every render (video-only
+             segments never carry audio, so per-segment AAC seam drift cannot
+             accumulate), is muxed in (-c copy). renders/segments/manifest.json
+             records the render identity, each segment's hash, and the concat
+             order; --no-cache re-renders every segment; --keep-temp keeps the
+             concat/audio intermediates. Persisted segments survive across runs
+             as the cache; segments orphaned by a boundary shift are removed.
     encode   --codec auto picks the platform's hardware ladder: on macOS
              h264_videotoolbox when this ffmpeg lists it (bitrate ladder by
              output height); on Windows the first of h264_nvenc, h264_qsv,
@@ -49,7 +70,7 @@ Contract:
     loudnorm two-pass ffmpeg loudnorm on the finished file, final render
              only (the fast preview never normalizes): pass 1 measures
              (loudnorm print_format=json over the whole timeline, which is
-             why it runs after chunk concat, never per chunk), pass 2
+             why it runs after the mux, never per segment), pass 2
              re-encodes the audio with the measured values (linear mode,
              TP -1.5, LRA 11, aac 192k 48kHz) while the video stream is
              copied, then atomically replaces the output. Target is
@@ -62,14 +83,15 @@ Contract:
              the render refuses with a clear message (--skip-disk-check
              overrides). Every looped image overlay input carries an explicit
              -t duration cap so looped/synthetic sources can never run away.
-             Progress lines print to stderr (aggregated across chunks, from
-             ffmpeg -progress). Expected vs actual duration is checked to
-             0.5s, and --boundary-frames extracts before/after stills at
-             every internal cut for the boundary-frame inspection.
-    summary  json.dumps on stdout: segments, chunks, encoder, overlays,
-             overlays_missing, expected/actual duration, loudnorm (null when
-             --no-loudnorm; else {target, applied, input_i, output_i,
-             output_tp}), output path.
+             Progress lines print to stderr (aggregated across the segment
+             pool, from ffmpeg -progress). Expected vs actual duration is
+             checked to 0.5s, and --boundary-frames extracts before/after
+             stills at every internal cut for the boundary-frame inspection.
+    summary  json.dumps on stdout: segments (EDL segment count),
+             render_segments, segments_rendered, segments_cached, encoder,
+             overlays, overlays_missing, expected/actual duration, loudnorm
+             (null when --no-loudnorm; else {target, applied, input_i,
+             output_i, output_tp}), boundary_frames, output path.
 
 Exit codes: 0 ok, 1 failure, 2 usage.
 
@@ -204,70 +226,101 @@ def run_loudnorm(output, target):
             "output_tp": stats.get("output_tp")}
 
 
-def run_chunks(cmds, durations, total):
-    """Run the chunk ffmpeg commands in parallel, aggregating -progress output
-    into percent lines on stderr. Returns (return_codes, stderr_tails)."""
-    procs, readers = [], []
-    progress = [0.0] * len(cmds)
-    tails = [""] * len(cmds)
+def run_jobs(cmds, durations, total, workers, label="render_final",
+             noun="segment"):
+    """Run the ffmpeg commands with at most `workers` in flight at once,
+    aggregating -progress output into percent lines on stderr. A bounded pool
+    (not one process per job) so an incremental render of many dirty segments
+    never spawns dozens of concurrent ffmpegs. Returns (return_codes,
+    stderr_tails) aligned to cmds; an empty cmds list returns ([], [])."""
+    n = len(cmds)
+    if n == 0:
+        return [], []
+    rcs = [None] * n
+    tails = [""] * n
+    progress = [0.0] * n
     lock = threading.Lock()
+    sem = threading.Semaphore(max(1, workers))
 
-    def read_out(i, pipe):
-        for line in pipe:
-            info = core.parse_progress(line)
-            if "seconds" in info:
-                with lock:
-                    progress[i] = min(info["seconds"], durations[i])
-        pipe.close()
+    def run_one(i):
+        with sem:
+            p = subprocess.Popen(cmds[i], stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE, text=True)
 
-    def read_err(i, pipe):
-        tail = deque(maxlen=60)
-        for line in pipe:
-            tail.append(line)
-        tails[i] = "".join(tail)
-        pipe.close()
+            def read_out(pipe):
+                for line in pipe:
+                    info = core.parse_progress(line)
+                    if "seconds" in info:
+                        with lock:
+                            progress[i] = min(info["seconds"], durations[i])
+                pipe.close()
 
-    for i, cmd in enumerate(cmds):
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE, text=True)
-        procs.append(p)
-        for target, pipe in ((read_out, p.stdout), (read_err, p.stderr)):
-            t = threading.Thread(target=target, args=(i, pipe), daemon=True)
+            t = threading.Thread(target=read_out, args=(p.stdout,), daemon=True)
             t.start()
-            readers.append(t)
+            tail = deque(maxlen=60)
+            for line in p.stderr:
+                tail.append(line)
+            p.stderr.close()
+            t.join(timeout=5)
+            rcs[i] = p.wait()
+            tails[i] = "".join(tail)
+            with lock:
+                progress[i] = durations[i]
 
-    print(f"render_final: rendering {len(cmds)} chunk(s), {total:.1f}s of "
-          "timeline", file=sys.stderr)
+    workers_threads = [threading.Thread(target=run_one, args=(i,), daemon=True)
+                       for i in range(n)]
+    for t in workers_threads:
+        t.start()
+    print(f"{label}: rendering {n} {noun}(s), {total:.1f}s "
+          f"({min(max(1, workers), n)} at a time)", file=sys.stderr)
     last = -1
-    while any(p.poll() is None for p in procs):
+    while any(t.is_alive() for t in workers_threads):
         time.sleep(0.5)
         with lock:
             done = sum(progress)
         pct = int(done / total * 100) if total else 0
         if pct != last:
-            print(f"render_final: {pct}% ({done:.1f}/{total:.1f}s, "
-                  f"{len(cmds)} chunk(s))", file=sys.stderr)
+            print(f"{label}: {pct}% ({done:.1f}/{total:.1f}s, {n} {noun}(s))",
+                  file=sys.stderr)
             last = pct
-    for t in readers:
-        t.join(timeout=5)
-    return [p.wait() for p in procs], tails
+    for t in workers_threads:
+        t.join()
+    return rcs, tails
 
 
-def concat_chunks(chunk_files, output):
-    """Losslessly concatenate the MPEG-TS chunks into the final mp4."""
+def concat_video(segment_files, output):
+    """Losslessly concatenate the video-only segment files into `output`
+    (concat demuxer, -c copy). No audio bitstream filter: the segments carry
+    no audio, the whole-program audio is muxed in afterward."""
     list_file = output.parent / f".{output.stem}-concat.txt"
     lines = []
-    for p in chunk_files:
-        quoted = str(p.resolve()).replace("'", "'\\''")
+    for p in segment_files:
+        quoted = str(Path(p).resolve()).replace("'", "'\\''")
         lines.append(f"file '{quoted}'\n")
     list_file.write_text("".join(lines), encoding="utf-8")
     cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(list_file),
-           "-c", "copy", "-bsf:a", "aac_adtstoasc",
-           "-movflags", "+faststart", str(output)]
+           "-c", "copy", "-movflags", "+faststart", str(output)]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     list_file.unlink(missing_ok=True)
     if proc.returncode != 0:
-        print("ffmpeg concat failed:", file=sys.stderr)
+        print("ffmpeg video concat failed:", file=sys.stderr)
+        print(" ".join(cmd), file=sys.stderr)
+        print(proc.stderr.strip()[-2000:], file=sys.stderr)
+        return False
+    return True
+
+
+def mux_av(video, audio, output):
+    """Mux the concatenated video-only file and the whole-program audio into
+    the final container, both stream-copied (no re-encode)."""
+    cmd = ["ffmpeg", "-y", "-i", str(video), "-i", str(audio),
+           "-c", "copy", "-map", "0:v:0", "-map", "1:a:0"]
+    if str(output).endswith((".mp4", ".mov")):
+        cmd += ["-movflags", "+faststart"]
+    cmd.append(str(output))
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        print("ffmpeg mux failed:", file=sys.stderr)
         print(" ".join(cmd), file=sys.stderr)
         print(proc.stderr.strip()[-2000:], file=sys.stderr)
         return False
@@ -292,7 +345,15 @@ def main(argv=None):
     parser.add_argument("--height", type=int, default=None,
                         help="scale output to this height (default: source native)")
     parser.add_argument("--parallel", type=int, default=2,
-                        help="max parallel render chunks (default 2)")
+                        help="max segment renders in flight at once (worker "
+                             "pool size, default 2)")
+    parser.add_argument("--segment-target-seconds", type=float, default=600.0,
+                        help="target duration per persisted render segment; "
+                             "boundaries snap to the next safe cut (default "
+                             "600 = 10 min)")
+    parser.add_argument("--no-cache", action="store_true",
+                        help="ignore any persisted segments and re-render every "
+                             "one (the manifest is still rewritten)")
     parser.add_argument("--loudness-target", type=float, default=-14.0,
                         help="two-pass loudnorm integrated target in LUFS "
                              "(default -14)")
@@ -377,58 +438,122 @@ def main(argv=None):
               file=sys.stderr)
         return 1
 
-    enc = core.encode_args(encoder, crf=args.crf, height=out_h)
     progress_flags = ("-progress", "pipe:1", "-nostats")
-    chunks = core.plan_chunks(edl, overlays, args.parallel)
+    enc_video = core.encode_args(encoder, crf=args.crf, height=out_h,
+                                 streams="video")
+    enc_audio = core.encode_args(encoder, streams="audio")
 
-    if len(chunks) == 1:
-        cmd, _ = core.build_command(edl, project_dir, output, scale_height,
-                                    overlays=overlays, overlay_size=overlay_size,
-                                    encode=enc, extra_output_flags=progress_flags,
-                                    encoder=encoder, target=target,
-                                    audio_map=audio_map)
-        rcs, tails = run_chunks([cmd], [total], total)
-        if rcs[0] != 0:
-            print("ffmpeg render failed:", file=sys.stderr)
-            print(" ".join(cmd), file=sys.stderr)
-            print(tails[0].strip()[-2000:], file=sys.stderr)
-            return 1
-    else:
-        cmds, files, durs = [], [], []
-        for i, ch in enumerate(chunks):
+    # The persistent incremental segment cache lives beside the output.
+    segments_dir = output.parent / "segments"
+    segments_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = segments_dir / "manifest.json"
+
+    segments = core.plan_segments(edl, overlays, args.segment_target_seconds)
+
+    # Shared render identity: any change here (encoder swap, ffmpeg bump,
+    # output dimensions, encode args) dirties every segment, since a
+    # mixed-encoder -c copy concat would produce a broken file.
+    render_key = {
+        "encoder": encoder,
+        "ffmpeg": core.ffmpeg_version(),
+        "dims": [out_w, out_h],
+        "encode": enc_video,
+    }
+    # Sources are fingerprinted cheaply (size+mtime); overlay files are hashed
+    # by content so a re-rendered graphic dirties the segment that consumes it.
+    source_digests = {src: core.content_digest(project_dir / src, cheap=True)
+                      for src in distinct}
+    overlay_digests = {ov["id"]: core.content_digest(ov["path"])
+                       for ov in overlays}
+
+    prior = None if args.no_cache else core.load_manifest(manifest_path)
+    prior_by_id = {e["id"]: e for e in (prior or {}).get("segments", [])}
+    key_changed = bool(prior) and prior.get("render_key") != render_key
+    if key_changed:
+        print("render_final: render settings changed (encoder/ffmpeg/dims/"
+              "encode); re-rendering every segment", file=sys.stderr)
+
+    # Resolve each render-segment's stable id, content hash, and cache status.
+    plan = []
+    for seg in segments:
+        sid = core.segment_id(edl, seg)
+        ih = core.segment_input_hash(edl, seg, render_key, source_digests,
+                                     overlay_digests)
+        seg_file = segments_dir / f"{sid}.ts"
+        cached = (not key_changed
+                  and prior_by_id.get(sid, {}).get("input_hash") == ih
+                  and seg_file.is_file())
+        plan.append({"seg": seg, "id": sid, "hash": ih,
+                     "file": seg_file, "cached": cached})
+
+    # Render the dirty segments video-only (deduped by id), via the bounded
+    # worker pool, each to a temp renamed into place only on success.
+    jobs = {}
+    for item in plan:
+        if not item["cached"]:
+            jobs.setdefault(item["id"], item)
+    jobs = list(jobs.values())
+    if jobs:
+        cmds, durs, temps = [], [], []
+        for item in jobs:
+            seg = item["seg"]
             sub = {
                 "source": edl.get("source"),
                 "fade_ms": edl.get("fade_ms", 30),
-                "segments": edl["segments"][ch["seg_start"]:ch["seg_end"]],
+                "segments": edl["segments"][seg["seg_start"]:seg["seg_end"]],
             }
-            f = output.parent / f".{output.stem}-chunk{i}.ts"
-            cmd, _ = core.build_command(sub, project_dir, f, scale_height,
-                                        overlays=ch["overlays"],
-                                        overlay_size=overlay_size,
-                                        encode=enc,
-                                        extra_output_flags=progress_flags,
-                                        encoder=encoder, target=target,
-                                        audio_map=audio_map)
+            tmp = segments_dir / f".{item['id']}.tmp.ts"
+            cmd, _ = core.build_command(
+                sub, project_dir, tmp, scale_height, overlays=seg["overlays"],
+                overlay_size=overlay_size, encode=enc_video,
+                extra_output_flags=progress_flags, encoder=encoder,
+                target=target, streams="video")
             cmds.append(cmd)
-            files.append(f)
-            durs.append(ch["duration"])
-        rcs, tails = run_chunks(cmds, durs, total)
+            durs.append(seg["duration"])
+            temps.append(tmp)
+        rcs, tails = run_jobs(cmds, durs, sum(durs), args.parallel)
         if any(rcs):
             for i, rc in enumerate(rcs):
                 if rc:
-                    print(f"ffmpeg chunk {i} failed:", file=sys.stderr)
+                    print(f"ffmpeg segment {jobs[i]['id']} failed:",
+                          file=sys.stderr)
                     print(" ".join(cmds[i]), file=sys.stderr)
                     print(tails[i].strip()[-2000:], file=sys.stderr)
-            if not args.keep_temp:
-                for f in files:
-                    f.unlink(missing_ok=True)
+            for tmp in temps:
+                tmp.unlink(missing_ok=True)
             return 1
-        ok = concat_chunks(files, output)
-        if not args.keep_temp:
-            for f in files:
-                f.unlink(missing_ok=True)
-        if not ok:
-            return 1
+        for item, tmp in zip(jobs, temps):
+            tmp.replace(item["file"])
+    else:
+        print("render_final: all segments cached; skipping video re-render",
+              file=sys.stderr)
+
+    # Rebuild the whole-program audio every render: cheap, and it keeps the
+    # timeline exact (per-segment AAC seam priming would accumulate drift).
+    audio_tmp = output.parent / f".{output.stem}-audio.m4a"
+    acmd, _ = core.build_command(
+        edl, project_dir, audio_tmp, None, encode=enc_audio,
+        extra_output_flags=progress_flags, audio_map=audio_map,
+        streams="audio")
+    arcs, atails = run_jobs([acmd], [total], total, 1, noun="audio pass")
+    if arcs[0] != 0:
+        print("ffmpeg audio render failed:", file=sys.stderr)
+        print(" ".join(acmd), file=sys.stderr)
+        print(atails[0].strip()[-2000:], file=sys.stderr)
+        audio_tmp.unlink(missing_ok=True)
+        return 1
+
+    # Losslessly concat the (cached + fresh) video segments, then mux the
+    # whole-program audio in. Both stream-copied, no re-encode.
+    video_tmp = output.parent / f".{output.stem}-video.mp4"
+    ok = concat_video([item["file"] for item in plan], video_tmp)
+    if ok:
+        ok = mux_av(video_tmp, audio_tmp, output)
+    if not args.keep_temp:
+        video_tmp.unlink(missing_ok=True)
+        audio_tmp.unlink(missing_ok=True)
+    if not ok:
+        return 1
 
     loudnorm = None
     if not args.no_loudnorm:
@@ -443,9 +568,38 @@ def main(argv=None):
         boundary_count = core.extract_boundary_frames(
             output, edl, Path(args.boundary_frames))
 
+    # Record the manifest (only on a successful render) and GC segment files
+    # left orphaned by boundary shifts. One manifest entry per unique id.
+    seen_ids, manifest_segments = set(), []
+    for item in plan:
+        if item["id"] in seen_ids:
+            continue
+        seen_ids.add(item["id"])
+        off = item["seg"]["offset"]
+        manifest_segments.append({
+            "id": item["id"],
+            "input_hash": item["hash"],
+            "file": f"segments/{item['id']}.ts",
+            "edl_range": [round(off, 3), round(off + item["seg"]["duration"], 3)],
+            "duration": round(item["seg"]["duration"], 3),
+        })
+    core.save_manifest(manifest_path, {
+        "render_key": render_key,
+        "segment_target_seconds": args.segment_target_seconds,
+        "loudnorm": loudnorm,
+        "segments": manifest_segments,
+        "concat_order": [item["id"] for item in plan],
+    })
+    for stale in segments_dir.glob("seg-*.ts"):
+        if stale.stem not in seen_ids:
+            stale.unlink(missing_ok=True)
+
+    rendered = sum(1 for item in plan if not item["cached"])
     summary = {
         "segments": len(edl["segments"]),
-        "chunks": len(chunks),
+        "render_segments": len(plan),
+        "segments_rendered": rendered,
+        "segments_cached": len(plan) - rendered,
         "encoder": encoder,
         "overlays": len(overlays),
         "overlays_missing": missing,

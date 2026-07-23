@@ -27,6 +27,7 @@ guaranteed to bake the same thing:
 No config discovery: every function takes explicit arguments. Stdlib only.
 """
 
+import hashlib
 import json
 import platform
 import shutil
@@ -207,8 +208,16 @@ def resolve_overlays(beats, graphics_dir):
 
 def build_filter_complex(edl, source_index, height, overlays=(), overlay_size=None,
                          hwupload=False, target=None, audio_map=None,
-                         silence_index=None):
+                         silence_index=None, streams="av"):
     """Build the filter_complex string for the whole timeline.
+
+    streams selects which output streams the graph emits: "av" (default, the
+    historic behavior, [outv] and [outa]), "video" ([outv] only, the audio
+    chains and the audio concat omitted), or "audio" ([outa] only, the video
+    chains and every overlay omitted). The video-only and audio-only forms
+    back the incremental segment render, which persists video-only segments
+    and rebuilds the audio whole every render; the "av" form is byte-for-byte
+    unchanged so the preview and any av caller stay identical.
 
     source_index maps each source path to its ffmpeg -i input index. Each
     segment is trimmed from its source, PTS-reset, sized, given an in/out
@@ -244,6 +253,10 @@ def build_filter_complex(edl, source_index, height, overlays=(), overlay_size=No
     encoders that only take hardware frames (vaapi); the caller must also set
     up the device (encoder_init_flags).
     """
+    want_v = streams in ("av", "video")
+    want_a = streams in ("av", "audio")
+    if not want_v:
+        overlays = ()  # overlays are a video-only concern
     fade = edl.get("fade_ms", 30) / 1000.0
     tw, th = target if target else (None, None)
     parts, vlabels, alabels = [], [], []
@@ -254,51 +267,61 @@ def build_filter_complex(edl, source_index, height, overlays=(), overlay_size=No
         # Never let the two fades overlap on a very short segment.
         f = min(fade, dur / 2) if dur > 0 else 0.0
         vlab, alab = f"v{i}", f"a{i}"
-        vchain = (
-            f"[{idx}:v]trim=start={_fmt(start)}:end={_fmt(end)},"
-            f"setpts=PTS-STARTPTS"
-        )
-        if target:
-            # Normalize every segment to one frame so mixed-size sources concat.
-            vchain += (
-                f",scale={tw}:{th}:force_original_aspect_ratio=decrease,"
-                f"pad={tw}:{th}:(ow-iw)/2:(oh-ih)/2,setsar=1[{vlab}]"
+        if want_v:
+            vchain = (
+                f"[{idx}:v]trim=start={_fmt(start)}:end={_fmt(end)},"
+                f"setpts=PTS-STARTPTS"
             )
-        elif height:
-            vchain += f",scale=-2:{height},setsar=1[{vlab}]"
-        else:
-            vchain += f",setsar=1[{vlab}]"
-        parts.append(vchain)
-        # Audio: real stream, or shared silence for an audio-less source.
-        if (silence_index is not None and audio_map is not None
-                and not audio_map.get(seg["source"], True)):
-            aidx, a_start, a_end = silence_index, 0.0, dur
-        else:
-            aidx, a_start, a_end = idx, start, end
-        achain = (
-            f"[{aidx}:a]atrim=start={_fmt(a_start)}:end={_fmt(a_end)},"
-            f"asetpts=PTS-STARTPTS"
-        )
-        if f > 0:
-            achain += (
-                f",afade=t=in:st=0:d={_fmt(f)}"
-                f",afade=t=out:st={_fmt(dur - f)}:d={_fmt(f)}"
+            if target:
+                # Normalize every segment to one frame so mixed-size sources concat.
+                vchain += (
+                    f",scale={tw}:{th}:force_original_aspect_ratio=decrease,"
+                    f"pad={tw}:{th}:(ow-iw)/2:(oh-ih)/2,setsar=1[{vlab}]"
+                )
+            elif height:
+                vchain += f",scale=-2:{height},setsar=1[{vlab}]"
+            else:
+                vchain += f",setsar=1[{vlab}]"
+            parts.append(vchain)
+            vlabels.append(f"[{vlab}]")
+        if want_a:
+            # Audio: real stream, or shared silence for an audio-less source.
+            if (silence_index is not None and audio_map is not None
+                    and not audio_map.get(seg["source"], True)):
+                aidx, a_start, a_end = silence_index, 0.0, dur
+            else:
+                aidx, a_start, a_end = idx, start, end
+            achain = (
+                f"[{aidx}:a]atrim=start={_fmt(a_start)}:end={_fmt(a_end)},"
+                f"asetpts=PTS-STARTPTS"
             )
-        achain += ",aresample=48000,aformat=channel_layouts=stereo"
-        achain += f"[{alab}]"
-        parts.append(achain)
-        vlabels.append(f"[{vlab}]")
-        alabels.append(f"[{alab}]")
+            if f > 0:
+                achain += (
+                    f",afade=t=in:st=0:d={_fmt(f)}"
+                    f",afade=t=out:st={_fmt(dur - f)}:d={_fmt(f)}"
+                )
+            achain += ",aresample=48000,aformat=channel_layouts=stereo"
+            achain += f"[{alab}]"
+            parts.append(achain)
+            alabels.append(f"[{alab}]")
     n = len(edl["segments"])
-    concat_inputs = "".join(v + a for v, a in zip(vlabels, alabels))
-    if not overlays:
-        if hwupload:
-            parts.append(f"{concat_inputs}concat=n={n}:v=1:a=1[basev][outa]")
-            parts.append("[basev]format=nv12,hwupload[outv]")
-        else:
-            parts.append(f"{concat_inputs}concat=n={n}:v=1:a=1[outv][outa]")
+    if not want_v:
+        # Audio-only: concat the audio chains straight to [outa].
+        parts.append(f"{''.join(alabels)}concat=n={n}:v=0:a=1[outa]")
         return ";".join(parts)
-    parts.append(f"{concat_inputs}concat=n={n}:v=1:a=1[basev][outa]")
+    # A stage after the video concat is needed when overlays composite over it
+    # or a hardware encoder demands hardware frames.
+    need_post = bool(overlays) or hwupload
+    if want_a:
+        concat_inputs = "".join(v + a for v, a in zip(vlabels, alabels))
+        head = f"{concat_inputs}concat=n={n}:v=1:a=1"
+        parts.append(f"{head}[basev][outa]" if need_post else f"{head}[outv][outa]")
+    else:
+        concat_inputs = "".join(vlabels)
+        head = f"{concat_inputs}concat=n={n}:v=1:a=0"
+        parts.append(f"{head}[basev]" if need_post else f"{head}[outv]")
+    if not need_post:
+        return ";".join(parts)
     prev = "basev"
     for k, ov in enumerate(overlays):
         lab = f"ov{k}"
@@ -327,8 +350,14 @@ PREVIEW_ENCODE = ["-c:v", "libx264", "-crf", "28", "-preset", "veryfast",
 
 def build_command(edl, project_dir, output, height, overlays=(),
                   overlay_size=None, encode=None, extra_output_flags=(),
-                  encoder=None, target=None, audio_map=None):
+                  encoder=None, target=None, audio_map=None, streams="av"):
     """Assemble (ffmpeg_argv, source_index) for one render invocation.
+
+    streams selects the output streams (passed through to build_filter_complex
+    and the -map flags): "av" (default, unchanged), "video" (video-only, no
+    audio silence input, maps [outv] only), or "audio" (audio-only, no overlay
+    inputs, maps [outa] only). The video/audio split backs the incremental
+    segment render (video segments persisted, audio rebuilt whole).
 
     encode replaces the default preview encode args (libx264 crf 28 veryfast
     + aac). Every looped image overlay input carries an explicit -t duration
@@ -351,14 +380,19 @@ def build_command(edl, project_dir, output, height, overlays=(),
     gets -init_hw_device flags and an hwupload filtergraph tail). Software
     and videotoolbox/nvenc/qsv/amf encoders need nothing here.
     """
+    want_v = streams in ("av", "video")
+    want_a = streams in ("av", "audio")
+    if not want_v:
+        overlays = ()  # overlays are a video-only concern
     distinct = []
     for seg in edl["segments"]:
         if seg["source"] not in distinct:
             distinct.append(seg["source"])
     source_index = {src: i for i, src in enumerate(distinct)}
-    need_silence = bool(audio_map) and any(
+    need_silence = want_a and bool(audio_map) and any(
         not audio_map.get(src, True) for src in distinct)
-    argv = ["ffmpeg", "-y", *encoder_init_flags(encoder)]
+    hwupload = want_v and encoder_needs_hwupload(encoder)
+    argv = ["ffmpeg", "-y", *(encoder_init_flags(encoder) if want_v else [])]
     for src in distinct:
         argv += ["-i", str((project_dir / src).resolve())]
     silence_index = None
@@ -381,11 +415,14 @@ def build_command(edl, project_dir, output, height, overlays=(),
     argv += [
         "-filter_complex",
         build_filter_complex(edl, source_index, height, ovs, overlay_size,
-                             hwupload=encoder_needs_hwupload(encoder),
-                             target=target, audio_map=audio_map,
-                             silence_index=silence_index),
-        "-map", "[outv]", "-map", "[outa]",
+                             hwupload=hwupload, target=target,
+                             audio_map=audio_map, silence_index=silence_index,
+                             streams=streams),
     ]
+    if want_v:
+        argv += ["-map", "[outv]"]
+    if want_a:
+        argv += ["-map", "[outa]"]
     argv += list(encode) if encode else list(PREVIEW_ENCODE)
     if str(output).endswith((".mp4", ".mov")):
         argv += ["-movflags", "+faststart"]
@@ -394,62 +431,192 @@ def build_command(edl, project_dir, output, height, overlays=(),
     return argv, source_index
 
 
-# --- chunk planning (segment-parallel final render) --------------------------
+# --- segment planning (persistent incremental render) ------------------------
 
 
-def plan_chunks(edl, overlays=(), parallel=2):
-    """Split the EDL into up to `parallel` contiguous chunks for parallel
-    rendering. Split points are internal cut boundaries that fall strictly
-    outside every overlay window, nearest to the equal-duration targets, so no
-    overlay ever spans two chunks and the concat is sample-exact. Returns
-    chunk dicts {seg_start, seg_end, offset, duration, overlays} where
-    overlays carry chunk-local start times.
+def plan_segments(edl, overlays=(), target_seconds=600.0):
+    """Partition the EDL into persistent render-segments with STABLE, sticky
+    boundaries for the incremental render cache.
+
+    Greedy, left to right: accumulate EDL segments until the running duration
+    since the last cut reaches target_seconds, then close the render-segment
+    at the next SAFE boundary, a hard cut between two EDL segments that no
+    overlay window spans (the boundary-safety rule the parallel render already
+    relied on). A boundary chosen this way depends only on the content BEFORE
+    it, so an edit later in the timeline cannot move an earlier boundary and
+    its persisted segment survives; because a render-segment's identity is the
+    content it contains (not its timeline offset), even the segments after an
+    edit keep their identity as long as the same EDL segments still group
+    together. The final render-segment always runs to the end.
+
+    target_seconds is a floor, not an exact size: an unsafe boundary (an
+    overlay straddles it) is skipped and the segment grows until the next safe
+    cut. Returns the same dict shape plan_chunks returned {seg_start, seg_end,
+    offset, duration, overlays}, overlays carrying chunk-local start times, so
+    the renderer treats a segment exactly like the old parallel chunk.
     """
     durs = segment_durations(edl)
-    total = sum(durs)
     n = len(durs)
-    parallel = max(1, min(parallel, n))
-    bounds = boundary_times(edl)
+    if n == 0:
+        return []
+    bounds = boundary_times(edl)  # times of the n-1 internal boundaries
 
-    def inside_overlay(t):
+    def spans_boundary(t):
         return any(ov["start"] < t < ov["start"] + ov["dur"] for ov in overlays)
 
-    valid = [(i, t) for i, t in enumerate(bounds) if not inside_overlay(t)]
-    cuts = []
-    for k in range(1, parallel):
-        target = total * k / parallel
-        best = None
-        for i, t in valid:
-            if cuts and t <= cuts[-1][1]:
-                continue
-            if best is None or abs(t - target) < abs(best[1] - target):
-                best = (i, t)
-        if best is not None:
-            cuts.append(best)
-    chunks = []
+    # Decide at each internal boundary i (between EDL seg i and i+1) whether to
+    # cut: the first SAFE boundary once the run since the last cut reaches the
+    # target. An unsafe boundary does not reset the accumulator, so the segment
+    # keeps growing to the next safe cut.
+    cut_after = [False] * max(0, n - 1)
+    running = 0.0
+    for i in range(n - 1):
+        running += durs[i]
+        if running >= target_seconds and not spans_boundary(bounds[i]):
+            cut_after[i] = True
+            running = 0.0
+    segments = []
     seg_start = 0
     offset = 0.0
-    for i, _t in cuts + [(n - 1, total)]:
-        seg_end = i + 1
-        dur = sum(durs[seg_start:seg_end])
-        chunks.append({
-            "seg_start": seg_start,
-            "seg_end": seg_end,
-            "offset": round(offset, 6),
-            "duration": round(dur, 6),
-            "overlays": [],
-        })
-        seg_start = seg_end
-        offset += dur
+    for i in range(n):
+        if i == n - 1 or cut_after[i]:
+            seg_end = i + 1
+            dur = sum(durs[seg_start:seg_end])
+            segments.append({
+                "seg_start": seg_start,
+                "seg_end": seg_end,
+                "offset": round(offset, 6),
+                "duration": round(dur, 6),
+                "overlays": [],
+            })
+            seg_start = seg_end
+            offset += dur
     for ov in overlays:
-        for ch in chunks:
-            last = ch is chunks[-1]
+        for ch in segments:
+            last = ch is segments[-1]
             if ch["offset"] <= ov["start"] < ch["offset"] + ch["duration"] or last:
                 local = dict(ov)
                 local["start"] = round(ov["start"] - ch["offset"], 6)
                 ch["overlays"].append(local)
                 break
-    return chunks
+    return segments
+
+
+# --- content addressing (the incremental render cache identity) --------------
+
+
+def content_digest(path, cheap=False):
+    """A content fingerprint for a file, or 'missing' when it is absent.
+
+    cheap=True returns size+mtime_ns, for large source media that is expensive
+    to hash and rarely changes silently. cheap=False (the default) returns a
+    truncated sha256 of the bytes, for small overlay and asset files whose
+    regeneration MUST dirty the segment that consumes them even when the path
+    is unchanged (a re-rendered graphic keeps its name)."""
+    p = Path(path)
+    try:
+        st = p.stat()
+    except OSError:
+        return "missing"
+    if cheap:
+        return f"size:{st.st_size}:mtime:{st.st_mtime_ns}"
+    h = hashlib.sha256()
+    try:
+        with open(p, "rb") as fh:
+            for block in iter(lambda: fh.read(1 << 20), b""):
+                h.update(block)
+    except OSError:
+        return "missing"
+    return "sha256:" + h.hexdigest()[:32]
+
+
+def ffmpeg_version():
+    """The ffmpeg build version token (part of the render identity: a bump can
+    change encoded output, so it must dirty every cached segment). 'unknown'
+    when ffmpeg cannot be run or the banner is unparseable."""
+    try:
+        proc = subprocess.run(["ffmpeg", "-version"],
+                              capture_output=True, text=True)
+    except OSError:
+        return "unknown"
+    if proc.returncode != 0 or not proc.stdout:
+        return "unknown"
+    parts = proc.stdout.splitlines()[0].split()
+    # "ffmpeg version 8.1.2 Copyright ..."
+    return parts[2] if len(parts) >= 3 and parts[0] == "ffmpeg" else "unknown"
+
+
+def segment_identity(edl, seg):
+    """Position-independent content identity of a render-segment: its EDL
+    slice as ordered (source, source-relative start, end) plus fade_ms. Never
+    includes the output-timeline offset, so an upstream edit that only shifts a
+    segment later in time leaves its identity unchanged."""
+    slice_ = edl["segments"][seg["seg_start"]:seg["seg_end"]]
+    return {
+        "fade_ms": edl.get("fade_ms", 30),
+        "segments": [{"source": s["source"],
+                      "start": round(s["start"], 6),
+                      "end": round(s["end"], 6)} for s in slice_],
+    }
+
+
+def segment_id(edl, seg):
+    """Stable filesystem-safe id for a render-segment, derived from its content
+    identity (not its position), so an identical slice keeps the same id and
+    persisted file across runs. Duplicate slices (the same source span kept
+    twice) legitimately share one id and one file."""
+    raw = json.dumps(segment_identity(edl, seg), sort_keys=True).encode("utf-8")
+    return "seg-" + hashlib.sha256(raw).hexdigest()[:16]
+
+
+def segment_input_hash(edl, seg, render_key, source_digests, overlay_digests):
+    """sha256 over the content-bearing, position-independent inputs of one
+    render-segment, the cache key: its slice identity, the digest of every
+    source it draws on, each overlay landing inside it (id, chunk-local start,
+    dur, image flag, and the overlay FILE's digest, so a re-rendered graphic
+    dirties the segment), and the shared render_key (resolved encoder, ffmpeg
+    version, output dims, video encode args). Absolute/edited-timeline offsets
+    are never hashed, so an edit upstream cannot dirty a segment whose own
+    content is unchanged.
+
+    source_digests maps source path -> digest; overlay_digests maps overlay id
+    -> digest. render_key is any JSON-serializable dict of shared render state.
+    """
+    seen, slice_sources = set(), []
+    for s in edl["segments"][seg["seg_start"]:seg["seg_end"]]:
+        if s["source"] not in seen:
+            seen.add(s["source"])
+            slice_sources.append([s["source"],
+                                  source_digests.get(s["source"], "missing")])
+    ovs = sorted(
+        ({"id": ov.get("id"),
+          "start": round(ov["start"], 6),
+          "dur": round(ov["dur"], 6),
+          "image": bool(ov.get("image")),
+          "digest": overlay_digests.get(ov.get("id"), "missing")}
+         for ov in seg["overlays"]),
+        key=lambda o: (o["start"], str(o["id"])))
+    payload = {
+        "identity": segment_identity(edl, seg),
+        "sources": sorted(slice_sources),
+        "overlays": ovs,
+        "render_key": render_key,
+    }
+    raw = json.dumps(payload, sort_keys=True).encode("utf-8")
+    return "sha256:" + hashlib.sha256(raw).hexdigest()
+
+
+def load_manifest(path):
+    """The prior segment manifest dict, or None when absent or unreadable."""
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def save_manifest(path, manifest):
+    """Write the segment manifest as pretty JSON."""
+    Path(path).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
 
 # --- encoder selection and disk preflight ------------------------------------
@@ -576,12 +743,19 @@ def bitrate_for(height):
     return 5000
 
 
-def encode_args(encoder, crf=18, height=1080):
+AUDIO_ENCODE = ["-c:a", "aac", "-b:a", "192k"]
+
+
+def encode_args(encoder, crf=18, height=1080, streams="av"):
     """Encode argv fragment for the final render. Hardware encoders take a
     bitrate from the ladder (no dependable CRF mode across drivers); libx264
     takes -crf. -pix_fmt is not forced for nvenc/qsv/amf (each negotiates
     its own supported format from the yuv420p filtergraph output) nor for
-    vaapi (it receives hardware frames via the hwupload chain)."""
+    vaapi (it receives hardware frames via the hwupload chain).
+
+    streams selects the fragment: "av" (default, video + aac audio, unchanged),
+    "video" (video only, for the persisted video segments), or "audio" (aac
+    only, for the whole-timeline audio pass)."""
     if is_hardware_encoder(encoder):
         v = ["-c:v", encoder, "-b:v", f"{bitrate_for(height)}k"]
         if encoder.endswith("_videotoolbox"):
@@ -591,7 +765,11 @@ def encode_args(encoder, crf=18, height=1080):
     else:
         v = ["-c:v", encoder, "-crf", str(crf), "-preset", "medium",
              "-pix_fmt", "yuv420p"]
-    return v + ["-c:a", "aac", "-b:a", "192k"]
+    if streams == "video":
+        return v
+    if streams == "audio":
+        return list(AUDIO_ENCODE)
+    return v + list(AUDIO_ENCODE)
 
 
 def estimate_output_bytes(duration_s, height, encoder="libx264"):

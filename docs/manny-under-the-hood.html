@@ -277,7 +277,7 @@
         </div>
         <div class="rcard">
           <div class="rhead"><h3>Rendering</h3><span class="chip work">working</span></div>
-          <p><b>ffmpeg</b>, segment-parallel and disk-preflighted, with videotoolbox hardware encode on macOS; the final render is loudness-normalized to -14 LUFS. The Windows (nvenc, qsv, amf) and Linux (nvenc, vaapi) encoder ladders with libx264 fallback are code-complete, pending real-hardware validation.</p>
+          <p><b>ffmpeg</b>, incremental and disk-preflighted: the timeline is partitioned into content-addressed segments, so a re-render re-encodes only the segments whose inputs actually changed and reuses the rest — one tweaked graphic on a long video is a seconds-long re-render. Video segments are cached; the audio is rebuilt whole every pass so the timeline stays exact. videotoolbox hardware encode on macOS; the final render is loudness-normalized to -14 LUFS. The Windows (nvenc, qsv, amf) and Linux (nvenc, vaapi) encoder ladders with libx264 fallback are code-complete, pending real-hardware validation.</p>
         </div>
         <div class="rcard">
           <div class="rhead"><h3>Graphics render</h3><span class="chip work">working</span></div>

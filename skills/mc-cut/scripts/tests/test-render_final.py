@@ -106,42 +106,165 @@ def edl_4x10():
     return {"source": "raw/a.mp4", "fade_ms": 30, "segments": segs}
 
 
-class TestPlanChunks(unittest.TestCase):
-    def test_even_split_no_overlays(self):
-        chunks = core.plan_chunks(edl_4x10(), parallel=2)
-        self.assertEqual(len(chunks), 2)
-        self.assertEqual(chunks[0]["seg_start"], 0)
-        self.assertEqual(chunks[0]["seg_end"], 2)
-        self.assertEqual(chunks[0]["duration"], 20.0)
-        self.assertEqual(chunks[1]["offset"], 20.0)
-        self.assertEqual(chunks[1]["duration"], 20.0)
+def edl_n(n, keep=10.0, gap=10.0):
+    """n single-source segments of `keep` seconds, `gap` apart in the source."""
+    segs = [{"source": "raw/a.mp4", "start": i * (keep + gap),
+             "end": i * (keep + gap) + keep} for i in range(n)]
+    return {"source": "raw/a.mp4", "fade_ms": 30, "segments": segs}
 
-    def test_split_avoids_overlay_windows(self):
+
+class TestPlanSegments(unittest.TestCase):
+    def test_target_floor_greedy_split(self):
+        # 4x10s, target 25s: accumulate until >=25, cut at next boundary.
+        segs = core.plan_segments(edl_4x10(), target_seconds=25.0)
+        self.assertEqual([(s["seg_start"], s["seg_end"]) for s in segs],
+                         [(0, 3), (3, 4)])
+        self.assertEqual(segs[0]["duration"], 30.0)
+        self.assertEqual(segs[1]["offset"], 30.0)
+
+    def test_short_timeline_is_one_segment(self):
+        # Never reaches the target -> a single render-segment.
+        segs = core.plan_segments(edl_4x10(), target_seconds=600.0)
+        self.assertEqual(len(segs), 1)
+        self.assertEqual(segs[0]["seg_start"], 0)
+        self.assertEqual(segs[0]["seg_end"], 4)
+
+    def test_boundary_snaps_past_overlay_span(self):
+        # target 15s would cut after seg1 (boundary at 20s), but an overlay
+        # spans 20s, so the cut snaps to the next safe boundary (30s).
         ov = [{"index": 1, "start": 19.0, "dur": 2.0, "image": True,
                "path": "g/x.png", "id": "x"}]
-        chunks = core.plan_chunks(edl_4x10(), ov, parallel=2)
-        self.assertEqual(len(chunks), 2)
-        # boundary 20 is inside the overlay; 10 and 30 are the valid picks
-        split = chunks[0]["duration"]
-        self.assertIn(split, (10.0, 30.0))
-        # the overlay lands whole in exactly one chunk, with a local start
-        owners = [c for c in chunks if c["overlays"]]
+        segs = core.plan_segments(edl_4x10(), ov, target_seconds=15.0)
+        self.assertEqual(segs[0]["duration"], 30.0)
+        owners = [s for s in segs if s["overlays"]]
         self.assertEqual(len(owners), 1)
-        local = owners[0]["overlays"][0]
-        self.assertEqual(local["start"], 19.0 - owners[0]["offset"])
+        self.assertEqual(owners[0]["overlays"][0]["start"],
+                         19.0 - owners[0]["offset"])
 
-    def test_parallel_one_and_cap(self):
-        self.assertEqual(len(core.plan_chunks(edl_4x10(), parallel=1)), 1)
-        edl = {"segments": [{"source": "s", "start": 0.0, "end": 5.0}]}
-        self.assertEqual(len(core.plan_chunks(edl, parallel=4)), 1)
-
-    def test_chunks_cover_everything_in_order(self):
-        chunks = core.plan_chunks(edl_4x10(), parallel=3)
-        self.assertEqual(chunks[0]["seg_start"], 0)
-        self.assertEqual(chunks[-1]["seg_end"], 4)
-        for a, b in zip(chunks, chunks[1:]):
+    def test_segments_cover_everything_in_order(self):
+        segs = core.plan_segments(edl_n(6), target_seconds=25.0)
+        self.assertEqual(segs[0]["seg_start"], 0)
+        self.assertEqual(segs[-1]["seg_end"], 6)
+        for a, b in zip(segs, segs[1:]):
             self.assertEqual(a["seg_end"], b["seg_start"])
             self.assertAlmostEqual(a["offset"] + a["duration"], b["offset"])
+
+    def test_empty_edl(self):
+        self.assertEqual(core.plan_segments({"segments": []}), [])
+
+    def test_earlier_boundaries_survive_a_late_edit(self):
+        # The stability guarantee: editing a late segment must not move any
+        # earlier render-segment boundary (so its cache survives).
+        base = edl_n(9)
+        before = core.plan_segments(base, target_seconds=25.0)
+        edited = edl_n(9)
+        edited["segments"][7]["end"] -= 3.0  # trim a late segment
+        after = core.plan_segments(edited, target_seconds=25.0)
+        # every render-segment that ends before the edited index is identical
+        early_before = [(s["seg_start"], s["seg_end"]) for s in before
+                        if s["seg_end"] <= 7]
+        early_after = [(s["seg_start"], s["seg_end"]) for s in after
+                       if s["seg_end"] <= 7]
+        self.assertEqual(early_before, early_after)
+        self.assertTrue(early_before)  # there is at least one such segment
+
+
+class TestSegmentIdentity(unittest.TestCase):
+    def seg(self, edl, a, b):
+        return {"seg_start": a, "seg_end": b, "offset": 0.0,
+                "duration": 0.0, "overlays": []}
+
+    def test_id_is_position_independent(self):
+        # Same slice content at two different EDL positions -> same id.
+        e1 = edl_n(4)
+        e2 = edl_n(6)  # segments 2..4 of e2 equal segments 0..2 of a shifted...
+        # Build an explicit match: slice (0,2) of e1 vs a slice of e2 whose
+        # (source,start,end) tuples are identical.
+        s1 = self.seg(e1, 0, 2)
+        e3 = {"source": "raw/a.mp4", "fade_ms": 30,
+              "segments": [{"source": "x", "start": 5.0, "end": 6.0}]
+              + e1["segments"][0:2]}
+        s3 = self.seg(e3, 1, 3)  # same two segments as s1, later position
+        self.assertEqual(core.segment_id(e1, s1), core.segment_id(e3, s3))
+
+    def test_id_changes_with_content(self):
+        e = edl_n(4)
+        s = self.seg(e, 0, 2)
+        e2 = edl_n(4)
+        e2["segments"][1]["end"] += 1.0
+        self.assertNotEqual(core.segment_id(e, s),
+                            core.segment_id(e2, self.seg(e2, 0, 2)))
+
+    def test_input_hash_reflects_overlay_file_and_render_key(self):
+        e = edl_n(4)
+        seg = {"seg_start": 0, "seg_end": 2, "offset": 0.0, "duration": 20.0,
+               "overlays": [{"id": "b1", "start": 1.0, "dur": 0.5,
+                             "image": True, "path": "g/b1.png"}]}
+        rk = {"encoder": "libx264", "ffmpeg": "8.1", "dims": [1920, 1080],
+              "encode": ["-c:v", "libx264", "-crf", "18"]}
+        sd = {"raw/a.mp4": "size:1:mtime:1"}
+        base = core.segment_input_hash(e, seg, rk, sd, {"b1": "digestA"})
+        # A re-rendered overlay file (new digest) dirties the segment.
+        moved = core.segment_input_hash(e, seg, rk, sd, {"b1": "digestB"})
+        self.assertNotEqual(base, moved)
+        # An encoder/render-key change dirties the segment.
+        rk2 = dict(rk, encoder="h264_videotoolbox")
+        self.assertNotEqual(
+            base, core.segment_input_hash(e, seg, rk2, sd, {"b1": "digestA"}))
+        # A source content change dirties the segment.
+        self.assertNotEqual(
+            base, core.segment_input_hash(
+                e, seg, rk, {"raw/a.mp4": "size:2:mtime:9"}, {"b1": "digestA"}))
+        # Same inputs -> stable hash.
+        self.assertEqual(
+            base, core.segment_input_hash(e, seg, rk, sd, {"b1": "digestA"}))
+
+    def test_input_hash_ignores_timeline_offset(self):
+        # The same segment content at a different output offset hashes the same
+        # (offset is derived, never hashed) as long as overlay-local starts and
+        # slice content are unchanged.
+        e = edl_n(4)
+        rk = {"encoder": "libx264", "ffmpeg": "8.1", "dims": [10, 10],
+              "encode": []}
+        sd = {"raw/a.mp4": "d"}
+        a = {"seg_start": 0, "seg_end": 2, "offset": 0.0, "duration": 20.0,
+             "overlays": []}
+        b = {"seg_start": 0, "seg_end": 2, "offset": 999.0, "duration": 20.0,
+             "overlays": []}
+        self.assertEqual(core.segment_input_hash(e, a, rk, sd, {}),
+                         core.segment_input_hash(e, b, rk, sd, {}))
+
+
+class TestManifestRoundTrip(unittest.TestCase):
+    def test_save_and_load(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "manifest.json"
+            m = {"render_key": {"encoder": "libx264"},
+                 "segments": [{"id": "seg-abc", "input_hash": "sha256:x"}]}
+            core.save_manifest(p, m)
+            self.assertEqual(core.load_manifest(p), m)
+
+    def test_load_missing_or_bad_is_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(core.load_manifest(Path(tmp) / "nope.json"))
+            bad = Path(tmp) / "bad.json"
+            bad.write_text("{not json")
+            self.assertIsNone(core.load_manifest(bad))
+
+
+class TestContentDigest(unittest.TestCase):
+    def test_cheap_vs_content_and_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Path(tmp) / "a.bin"
+            f.write_bytes(b"hello")
+            cheap = core.content_digest(f, cheap=True)
+            full = core.content_digest(f, cheap=False)
+            self.assertTrue(cheap.startswith("size:5:mtime:"))
+            self.assertTrue(full.startswith("sha256:"))
+            # content change moves the sha256 digest
+            f.write_bytes(b"hello world")
+            self.assertNotEqual(full, core.content_digest(f))
+            self.assertEqual(core.content_digest(Path(tmp) / "gone"), "missing")
 
 
 def never_probe(encoder):
@@ -465,7 +588,8 @@ class TestCli(unittest.TestCase):
 @unittest.skipUnless(FFMPEG, "ffmpeg/ffprobe not installed")
 class TestEndToEnd(unittest.TestCase):
     """Synthesized-fixture render: a 4s test source, a two-segment EDL, one
-    PNG overlay from a beat table, two parallel chunks, boundary frames."""
+    PNG overlay from a beat table, the incremental segment cache (fresh render
+    then cache hit), boundary frames."""
 
     @classmethod
     def setUpClass(cls):
@@ -509,43 +633,76 @@ class TestEndToEnd(unittest.TestCase):
     def tearDownClass(cls):
         cls.tmp.cleanup()
 
-    def test_parallel_composited_render(self):
-        out = self.proj / "renders" / "final.mp4"
+    def render(self, subdir, *extra):
+        """Run render_final into its own output dir (so each test's segment
+        cache is isolated) and return the parsed summary + the run result."""
+        outdir = self.proj / "renders" / subdir
+        out = outdir / "final.mp4"
         r = run_cli([str(self.proj / "cut" / "edl.json"), "-o", str(out),
-                     "--beats", str(self.proj / "beats.md"),
-                     "--graphics-dir", str(self.proj / "graphics"),
-                     "--codec", "libx264", "--crf", "30", "--parallel", "2",
-                     "--boundary-frames", str(self.proj / "renders" / "bf")])
-        self.assertEqual(r.returncode, 0, r.stderr)
-        summary = json.loads(r.stdout)
-        self.assertEqual(summary["segments"], 2)
-        self.assertEqual(summary["chunks"], 2)
-        self.assertEqual(summary["overlays"], 1)
-        self.assertEqual(summary["overlays_missing"], ["b9"])
-        self.assertTrue(out.is_file())
-        self.assertAlmostEqual(summary["actual_duration_seconds"], 2.0,
-                               delta=0.5)
-        self.assertEqual(summary["boundary_frames"], 2)
-        # loudnorm ran by default, post-concat, against the default target
-        self.assertEqual(summary["loudnorm"]["target"], -14.0)
-        self.assertTrue(summary["loudnorm"]["applied"])
-        # progress lines reached stderr
-        self.assertIn("render_final:", r.stderr)
-        # chunk intermediates and loudnorm temp were cleaned up
-        self.assertEqual(list((self.proj / "renders").glob("*.ts")), [])
-        self.assertEqual(list((self.proj / "renders").glob(".*loudnorm*")), [])
+                     "--codec", "libx264", "--crf", "30", *extra])
+        return r, out, outdir
 
-    def test_single_chunk_plain_render(self):
-        out = self.proj / "renders" / "plain.mp4"
-        r = run_cli([str(self.proj / "cut" / "edl.json"), "-o", str(out),
-                     "--codec", "libx264", "--crf", "30", "--parallel", "1",
-                     "--no-loudnorm"])
+    def test_incremental_composited_render_then_cache_hit(self):
+        args = ["--beats", str(self.proj / "beats.md"),
+                "--graphics-dir", str(self.proj / "graphics"),
+                "--parallel", "2", "--segment-target-seconds", "0.5"]
+        # First render: a two-segment timeline, both encoded fresh.
+        r, out, outdir = self.render("comp", *args,
+                                     "--boundary-frames", str(self.proj / "bf"))
         self.assertEqual(r.returncode, 0, r.stderr)
-        summary = json.loads(r.stdout)
-        self.assertEqual(summary["chunks"], 1)
-        self.assertEqual(summary["overlays"], 0)
-        self.assertIsNone(summary["loudnorm"])  # explicit opt-out
+        s = json.loads(r.stdout)
+        self.assertEqual(s["segments"], 2)
+        self.assertEqual(s["render_segments"], 2)
+        self.assertEqual(s["segments_rendered"], 2)
+        self.assertEqual(s["segments_cached"], 0)
+        self.assertEqual(s["overlays"], 1)
+        self.assertEqual(s["overlays_missing"], ["b9"])
         self.assertTrue(out.is_file())
+        self.assertAlmostEqual(s["actual_duration_seconds"], 2.0, delta=0.5)
+        self.assertEqual(s["boundary_frames"], 2)
+        self.assertEqual(s["loudnorm"]["target"], -14.0)
+        self.assertTrue(s["loudnorm"]["applied"])
+        self.assertIn("render_final:", r.stderr)
+        # Segments persisted; the manifest is written; no stray temps.
+        segs = sorted((outdir / "segments").glob("seg-*.ts"))
+        self.assertEqual(len(segs), 2)
+        self.assertTrue((outdir / "segments" / "manifest.json").is_file())
+        self.assertEqual(list(outdir.glob("*.ts")), [])       # no temp .ts
+        self.assertEqual(list(outdir.glob(".*")), [])          # no dotfile temps
+
+        # Second render, nothing changed: every segment is served from cache.
+        r2, out2, _ = self.render("comp", *args)
+        self.assertEqual(r2.returncode, 0, r2.stderr)
+        s2 = json.loads(r2.stdout)
+        self.assertEqual(s2["segments_rendered"], 0)
+        self.assertEqual(s2["segments_cached"], 2)
+        self.assertAlmostEqual(s2["actual_duration_seconds"], 2.0, delta=0.5)
+        self.assertIn("all segments cached", r2.stderr)
+
+    def test_single_segment_plain_render(self):
+        # Default 600s target over a 2s timeline: one render-segment, no cache
+        # hit, no audio-less handling; plain (no overlays), loudnorm opted out.
+        r, out, _ = self.render("plain", "--parallel", "1", "--no-loudnorm")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        s = json.loads(r.stdout)
+        self.assertEqual(s["render_segments"], 1)
+        self.assertEqual(s["segments_rendered"], 1)
+        self.assertEqual(s["overlays"], 0)
+        self.assertIsNone(s["loudnorm"])  # explicit opt-out
+        self.assertTrue(out.is_file())
+
+    def test_no_cache_forces_full_rerender(self):
+        args = ["--parallel", "2", "--segment-target-seconds", "0.5",
+                "--no-loudnorm"]
+        r, _, _ = self.render("nocache", *args)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(r.stdout)["segments_rendered"], 2)
+        # Re-render with --no-cache: nothing served from cache.
+        r2, _, _ = self.render("nocache", *args, "--no-cache")
+        self.assertEqual(r2.returncode, 0, r2.stderr)
+        s2 = json.loads(r2.stdout)
+        self.assertEqual(s2["segments_rendered"], 2)
+        self.assertEqual(s2["segments_cached"], 0)
 
 
 class TestMultiSourceCommand(unittest.TestCase):
@@ -599,8 +756,9 @@ class TestMixedSourcesEndToEnd(unittest.TestCase):
     """Real renders of the cases that raised 'Input link parameters do not
     match' and 'Stream specifier :a matches no streams': a 16:9 cam with 44.1k
     audio spliced with a 4:3 screen recording that has no audio at all. Both
-    the frame-size normalization and the silence synthesis are exercised, over
-    a two-chunk parallel render so the chunk concat is validated too."""
+    the frame-size normalization (video segment pass) and the silence synthesis
+    (whole-program audio pass, audio-less source referenced twice) are
+    exercised end to end through the segment/concat/mux path."""
 
     @classmethod
     def setUpClass(cls):
