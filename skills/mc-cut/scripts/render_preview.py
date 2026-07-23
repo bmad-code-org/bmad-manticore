@@ -119,8 +119,13 @@ def main(argv=None):
         print("edl has no segments", file=sys.stderr)
         return 2
 
+    distinct = []
+    for seg in edl["segments"]:
+        if seg["source"] not in distinct:
+            distinct.append(seg["source"])
+    multi = len(distinct) > 1
+
     overlays, missing, skipped = [], [], []
-    overlay_size = None
     if args.beats:
         try:
             overlays, missing, skipped = gather_overlays(args.beats,
@@ -130,19 +135,32 @@ def main(argv=None):
             return 1
         for reason in skipped:
             print(f"beat row skipped: {reason}", file=sys.stderr)
+
+    # One target frame is needed to scale overlays and to normalize mixed-size
+    # sources so the concat inputs match (cam + screencast).
+    overlay_size = None
+    target = None
+    if overlays or multi:
+        dims = core.probe_dims(project_dir / edl["segments"][0]["source"])
+        if dims is None:
+            print("cannot probe source dimensions", file=sys.stderr)
+            return 1
+        frame = (core.even(dims[0] * args.height / dims[1]), args.height)
         if overlays:
-            dims = core.probe_dims(project_dir / edl["segments"][0]["source"])
-            if dims is None:
-                print("cannot probe source dimensions for overlay scaling",
-                      file=sys.stderr)
-                return 1
-            ow = core.even(dims[0] * args.height / dims[1])
-            overlay_size = (ow, args.height)
+            overlay_size = frame
+        if multi:
+            target = frame
+
+    # Audio-less sources (a screen recording with no audio) get synthesized
+    # silence so the filtergraph never references a missing :a stream.
+    audio_map = {src: core.probe_has_audio(project_dir / src)
+                 for src in distinct}
 
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     cmd, _ = build_command(edl, project_dir, output, args.height,
-                           overlays=overlays, overlay_size=overlay_size)
+                           overlays=overlays, overlay_size=overlay_size,
+                           target=target, audio_map=audio_map)
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         print("ffmpeg render failed:", file=sys.stderr)

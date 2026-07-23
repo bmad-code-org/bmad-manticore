@@ -1,6 +1,6 @@
 ---
 format: livestream-vod
-stages: [new, cut, beats, graphics, assets, package, final, retro]
+stages: [new, cut, beats, assets, graphics, package, final, retro]
 engine_overlays: hyperframes
 engine_stingers: none
 generated_broll: allowed-with-verification

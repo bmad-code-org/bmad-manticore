@@ -1,6 +1,6 @@
 ---
 format: voiceover-explainer
-stages: [new, braindump, outline, script, record, cut, beats, graphics, assets, package, final, retro]
+stages: [new, braindump, outline, script, record, cut, beats, assets, graphics, package, final, retro]
 engine_overlays: hyperframes
 engine_stingers: hyperframes
 generated_broll: allowed

@@ -16,7 +16,7 @@ SCRIPT = Path(__file__).resolve().parent.parent / "merge_profile_frontmatter.py"
 
 SHIPPED = """---
 format: talking-head
-stages: [new, braindump, outline, script, record, cut, beats, graphics, assets, package, final, retro]
+stages: [new, braindump, outline, script, record, cut, beats, assets, graphics, package, final, retro]
 engine_overlays: hyperframes
 generated_broll: allowed
 beat-types: [popup, diagram, lower-third, stat-card, cta]
@@ -34,7 +34,7 @@ Shipped prose that must never reach the studio copy.
 
 STUDIO = """---
 format: talking-head
-stages: [new, braindump, outline, script, record, cut, beats, graphics, assets, package, final, retro]
+stages: [new, braindump, outline, script, record, cut, beats, assets, graphics, package, final, retro]
 engine_overlays: ograf
 generated_broll: banned
 ---

@@ -11,17 +11,25 @@ The actual render, ffprobe, and boundary-frame extraction are exercised by
 the synthesized-fixture integration test in test-render_final.py (same
 compositing core) and by running the script against a real source."""
 import importlib.util
+import json
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parent.parent / "render_preview.py"
+SCRIPTS = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(SCRIPTS))
+SCRIPT = SCRIPTS / "render_preview.py"
+
+import composite_core as core  # noqa: E402
 
 spec = importlib.util.spec_from_file_location("render_preview", SCRIPT)
 mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
+
+FFMPEG = shutil.which("ffmpeg") and shutil.which("ffprobe")
 
 
 def canned_edl():
@@ -153,6 +161,77 @@ class TestCommand(unittest.TestCase):
         self.assertEqual(cmd[-1], "/out/p.mp4")
 
 
+def edl_two_sources():
+    # A 16:9 cam and a 4:3 screencast, both used in the timeline.
+    return {
+        "source": "raw/cam.mp4", "fade_ms": 30,
+        "segments": [
+            {"source": "raw/cam.mp4", "start": 0.0, "end": 2.0},
+            {"source": "raw/screen.mp4", "start": 0.0, "end": 3.0},
+            {"source": "raw/screen.mp4", "start": 5.0, "end": 6.0},
+        ],
+    }
+
+
+class TestMultiSourceFrame(unittest.TestCase):
+    """Mixed-size sources must be normalized to one target frame, or the
+    concat filter rejects the mismatched inputs (cam 16:9 + screencast 4:3)."""
+
+    def test_target_pads_every_segment_to_one_frame(self):
+        edl = edl_two_sources()
+        idx = {"raw/cam.mp4": 0, "raw/screen.mp4": 1}
+        fc = mod.build_filter_complex(edl, idx, 720, target=(1280, 720))
+        # all three segment chains normalize to the SAME frame
+        self.assertEqual(
+            fc.count("scale=1280:720:force_original_aspect_ratio=decrease,"
+                     "pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1"), 3)
+        # the old height-only scale (which left widths mismatched) is gone
+        self.assertNotIn("scale=-2:720", fc)
+
+    def test_single_source_keeps_plain_scale(self):
+        # single-source behavior is unchanged: plain scale=-2:height, no pad
+        fc = mod.build_filter_complex(canned_edl(), {"raw/camera-a.mp4": 0}, 720)
+        self.assertIn("scale=-2:720", fc)
+        self.assertNotIn("force_original_aspect_ratio", fc)
+
+
+class TestAudioNormalization(unittest.TestCase):
+    """Every audio chain is resampled to 48k stereo so sources with different
+    sample rates or channel layouts concat cleanly; audio-less sources draw
+    synthesized silence instead of a missing :a stream."""
+
+    def test_every_chain_ends_in_resample_and_layout(self):
+        fc = mod.build_filter_complex(canned_edl(), {"raw/camera-a.mp4": 0}, 720)
+        self.assertEqual(
+            fc.count("aresample=48000,aformat=channel_layouts=stereo"), 3)
+
+    def test_audioless_source_draws_shared_silence(self):
+        edl = edl_two_sources()
+        audio_map = {"raw/cam.mp4": True, "raw/screen.mp4": False}
+        cmd, _ = mod.build_command(edl, Path("/proj"), Path("/out/p.mp4"), 720,
+                                   target=(1280, 720), audio_map=audio_map)
+        joined = " ".join(cmd)
+        # exactly one synthesized silent input, added after the two real sources
+        self.assertEqual(joined.count("-f lavfi"), 1)
+        self.assertIn("anullsrc=channel_layout=stereo:sample_rate=48000", joined)
+        fc = cmd[cmd.index("-filter_complex") + 1]
+        # cam (input 0) keeps its real audio
+        self.assertIn("[0:a]atrim=start=0:end=2", fc)
+        # screen (input 1) is audio-less: never referenced for audio; both of
+        # its segments draw from the shared anullsrc at input index 2
+        self.assertNotIn("[1:a]", fc)
+        self.assertEqual(fc.count("[2:a]atrim"), 2)
+
+    def test_no_silence_input_when_every_source_has_audio(self):
+        edl = edl_two_sources()
+        audio_map = {"raw/cam.mp4": True, "raw/screen.mp4": True}
+        cmd, _ = mod.build_command(edl, Path("/proj"), Path("/out/p.mp4"), 720,
+                                   target=(1280, 720), audio_map=audio_map)
+        self.assertNotIn("anullsrc", " ".join(cmd))
+        fc = cmd[cmd.index("-filter_complex") + 1]
+        self.assertIn("[1:a]atrim", fc)
+
+
 def run(args):
     return subprocess.run([sys.executable, str(SCRIPT), *args],
                           capture_output=True, text=True)
@@ -169,6 +248,70 @@ class TestCli(unittest.TestCase):
             edl.write_text('{"source":"x","segments":[]}')
             r = run([str(edl), "-o", str(Path(tmp) / "p.mp4")])
             self.assertEqual(r.returncode, 2)
+
+
+@unittest.skipUnless(FFMPEG, "ffmpeg/ffprobe not installed")
+class TestMixedSourcePreviewEndToEnd(unittest.TestCase):
+    """The maintainer's primary render-first case: a preview composited from a
+    16:9 cam (44.1k audio) and a 4:3 screen recording with NO audio. Mixed
+    frame sizes and the missing audio stream both used to hard-fail at concat;
+    this renders the actual preview end to end."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        proj = Path(cls.tmp.name)
+        (proj / "raw").mkdir()
+        (proj / "cut").mkdir()
+        # cam: 192x108 (16:9) with 44.1k audio (mismatched rate on purpose)
+        r = subprocess.run(
+            ["ffmpeg", "-y",
+             "-f", "lavfi", "-t", "4", "-i", "testsrc2=size=192x108:rate=30",
+             "-f", "lavfi", "-t", "4",
+             "-i", "sine=frequency=440:sample_rate=44100",
+             "-t", "4", "-shortest",
+             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
+             "-pix_fmt", "yuv420p", "-c:a", "aac",
+             str(proj / "raw" / "cam.mp4")],
+            capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+        # screen: 160x120 (4:3, different aspect) with NO audio at all
+        r = subprocess.run(
+            ["ffmpeg", "-y",
+             "-f", "lavfi", "-t", "4", "-i", "testsrc2=size=160x120:rate=30",
+             "-t", "4",
+             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
+             "-pix_fmt", "yuv420p",
+             str(proj / "raw" / "screen.mp4")],
+            capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+        edl = {"source": "raw/cam.mp4", "fade_ms": 30, "pad_ms": 60,
+               "segments": [
+                   {"source": "raw/cam.mp4", "start": 0.5, "end": 2.0},
+                   {"source": "raw/screen.mp4", "start": 0.5, "end": 2.0},
+                   {"source": "raw/screen.mp4", "start": 2.5, "end": 3.5}]}
+        (proj / "cut" / "edl.json").write_text(json.dumps(edl))
+        cls.proj = proj
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def test_preview_renders_mixed_dimensions_and_audioless(self):
+        out = self.proj / "cut" / "preview.mp4"
+        r = run([str(self.proj / "cut" / "edl.json"), "-o", str(out),
+                 "--height", "108"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        summary = json.loads(r.stdout)
+        self.assertEqual(summary["segments"], 3)
+        self.assertTrue(out.is_file())
+        self.assertAlmostEqual(summary["actual_duration_seconds"], 3.5,
+                               delta=0.5)
+        # every frame is the one normalized target size, computed from the
+        # first source at the requested height
+        dims = core.probe_dims(self.proj / "raw" / "cam.mp4")
+        expected_w = core.even(dims[0] * 108 / dims[1])
+        self.assertEqual(core.probe_dims(out), (expected_w, 108))
 
 
 if __name__ == "__main__":

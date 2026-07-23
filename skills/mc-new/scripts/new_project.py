@@ -123,7 +123,7 @@ def main() -> None:
                 f"error: --ingest creates a footage-first project, but format {args.fmt!r} "
                 f"includes ideation stages {ideation}; use a footage-first profile whose "
                 "stages go straight to post-production, e.g. "
-                "stages: [new, cut, beats, graphics, assets, package, final, retro]"
+                "stages: [new, cut, beats, assets, graphics, package, final, retro]"
             )
 
     proj = (projects_dir / args.series / args.slug) if args.series else (projects_dir / args.slug)

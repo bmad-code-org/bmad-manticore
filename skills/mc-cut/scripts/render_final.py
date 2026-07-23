@@ -333,6 +333,12 @@ def main(argv=None):
             print(f"beat row skipped: {reason}", file=sys.stderr)
         overlays, missing = core.resolve_overlays(beats, args.graphics_dir)
 
+    distinct = []
+    for seg in edl["segments"]:
+        if seg["source"] not in distinct:
+            distinct.append(seg["source"])
+    multi = len(distinct) > 1
+
     # Output dimensions from the first source (needed for overlay scaling,
     # the bitrate ladder, and the disk estimate).
     dims = core.probe_dims(project_dir / edl["segments"][0]["source"])
@@ -348,6 +354,13 @@ def main(argv=None):
         out_w, out_h = core.even(dims[0]), core.even(dims[1])
         scale_height = None
     overlay_size = (out_w, out_h) if overlays else None
+    # Multi-source timelines normalize every segment (and every chunk) to this
+    # one frame so the mixed-size concat matches; single-source is unchanged.
+    target = (out_w, out_h) if multi else None
+    # Audio-less sources get synthesized silence; probe each distinct source
+    # once and pass the map to every chunk.
+    audio_map = {src: core.probe_has_audio(project_dir / src)
+                 for src in distinct}
 
     total = sum(core.segment_durations(edl))
     encoder = core.pick_encoder(args.codec)
@@ -372,7 +385,8 @@ def main(argv=None):
         cmd, _ = core.build_command(edl, project_dir, output, scale_height,
                                     overlays=overlays, overlay_size=overlay_size,
                                     encode=enc, extra_output_flags=progress_flags,
-                                    encoder=encoder)
+                                    encoder=encoder, target=target,
+                                    audio_map=audio_map)
         rcs, tails = run_chunks([cmd], [total], total)
         if rcs[0] != 0:
             print("ffmpeg render failed:", file=sys.stderr)
@@ -393,7 +407,8 @@ def main(argv=None):
                                         overlay_size=overlay_size,
                                         encode=enc,
                                         extra_output_flags=progress_flags,
-                                        encoder=encoder)
+                                        encoder=encoder, target=target,
+                                        audio_map=audio_map)
             cmds.append(cmd)
             files.append(f)
             durs.append(ch["duration"])

@@ -548,6 +548,118 @@ class TestEndToEnd(unittest.TestCase):
         self.assertTrue(out.is_file())
 
 
+class TestMultiSourceCommand(unittest.TestCase):
+    """Pure command/filtergraph construction for the mixed-source cases that
+    broke concat: different frame sizes, and a source with no audio."""
+
+    def edl_two_sources(self):
+        return {
+            "source": "raw/cam.mp4", "fade_ms": 30,
+            "segments": [
+                {"source": "raw/cam.mp4", "start": 0.0, "end": 2.0},
+                {"source": "raw/screen.mp4", "start": 0.0, "end": 3.0},
+            ],
+        }
+
+    def test_target_normalizes_every_segment(self):
+        edl = self.edl_two_sources()
+        idx = {"raw/cam.mp4": 0, "raw/screen.mp4": 1}
+        fc = core.build_filter_complex(edl, idx, 720, target=(1280, 720))
+        self.assertEqual(
+            fc.count("scale=1280:720:force_original_aspect_ratio=decrease,"
+                     "pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1"), 2)
+        self.assertNotIn("scale=-2:720", fc)
+
+    def test_audioless_source_gets_synthesized_silence(self):
+        edl = self.edl_two_sources()
+        audio_map = {"raw/cam.mp4": True, "raw/screen.mp4": False}
+        cmd, _ = core.build_command(edl, Path("/proj"), "out.mp4", 1080,
+                                    target=(1920, 1080), audio_map=audio_map,
+                                    encoder="libx264")
+        joined = " ".join(cmd)
+        self.assertEqual(joined.count("-f lavfi"), 1)
+        self.assertIn("anullsrc=channel_layout=stereo:sample_rate=48000",
+                      joined)
+        fc = cmd[cmd.index("-filter_complex") + 1]
+        self.assertNotIn("[1:a]", fc)          # audio-less source not read
+        self.assertIn("[2:a]atrim", fc)        # silence input drives its audio
+        self.assertIn("aresample=48000,aformat=channel_layouts=stereo", fc)
+
+    def test_audio_map_none_keeps_real_streams(self):
+        edl = self.edl_two_sources()
+        cmd, _ = core.build_command(edl, Path("/proj"), "out.mp4", 1080,
+                                    encoder="libx264")
+        self.assertNotIn("anullsrc", " ".join(cmd))
+        fc = cmd[cmd.index("-filter_complex") + 1]
+        self.assertIn("[1:a]atrim", fc)
+
+
+@unittest.skipUnless(FFMPEG, "ffmpeg/ffprobe not installed")
+class TestMixedSourcesEndToEnd(unittest.TestCase):
+    """Real renders of the cases that raised 'Input link parameters do not
+    match' and 'Stream specifier :a matches no streams': a 16:9 cam with 44.1k
+    audio spliced with a 4:3 screen recording that has no audio at all. Both
+    the frame-size normalization and the silence synthesis are exercised, over
+    a two-chunk parallel render so the chunk concat is validated too."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        proj = Path(cls.tmp.name)
+        (proj / "raw").mkdir()
+        (proj / "cut").mkdir()
+        # cam: 160x90 (16:9), 44.1k audio
+        r = subprocess.run(
+            ["ffmpeg", "-y",
+             "-f", "lavfi", "-t", "6", "-i", "testsrc2=size=160x90:rate=30",
+             "-f", "lavfi", "-t", "6",
+             "-i", "sine=frequency=440:sample_rate=44100",
+             "-t", "6", "-shortest",
+             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
+             "-pix_fmt", "yuv420p", "-c:a", "aac",
+             str(proj / "raw" / "cam.mp4")],
+            capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+        # screen: 160x120 (4:3, different aspect), NO audio stream
+        r = subprocess.run(
+            ["ffmpeg", "-y",
+             "-f", "lavfi", "-t", "6", "-i", "testsrc2=size=160x120:rate=30",
+             "-t", "6",
+             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
+             "-pix_fmt", "yuv420p",
+             str(proj / "raw" / "screen.mp4")],
+            capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+        # cam, then two screen segments (audio-less source, referenced twice)
+        edl = {"source": "raw/cam.mp4", "fade_ms": 30, "pad_ms": 60,
+               "segments": [
+                   {"source": "raw/cam.mp4", "start": 0.5, "end": 2.0},
+                   {"source": "raw/screen.mp4", "start": 0.5, "end": 2.0},
+                   {"source": "raw/screen.mp4", "start": 3.0, "end": 4.5}]}
+        (proj / "cut" / "edl.json").write_text(json.dumps(edl))
+        cls.proj = proj
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def test_mixed_dimensions_and_audioless_render(self):
+        out = self.proj / "renders" / "mixed.mp4"
+        r = run_cli([str(self.proj / "cut" / "edl.json"), "-o", str(out),
+                     "--codec", "libx264", "--crf", "30", "--parallel", "2",
+                     "--no-loudnorm", "--height", "120"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        summary = json.loads(r.stdout)
+        self.assertEqual(summary["segments"], 3)
+        self.assertTrue(out.is_file())
+        self.assertAlmostEqual(summary["actual_duration_seconds"], 4.5,
+                               delta=0.5)
+        # every frame is the one normalized target size
+        dims = core.probe_dims(self.proj / "raw" / "cam.mp4")
+        expected_w = core.even(dims[0] * 120 / dims[1])
+        self.assertEqual(core.probe_dims(out), (expected_w, 120))
+
+
 @unittest.skipUnless(FFMPEG, "ffmpeg/ffprobe not installed")
 class TestLoudnormEndToEnd(unittest.TestCase):
     """A real two-pass loudnorm run: a quiet 7s test tone rendered with the

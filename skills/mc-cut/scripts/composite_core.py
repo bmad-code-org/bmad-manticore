@@ -206,13 +206,32 @@ def resolve_overlays(beats, graphics_dir):
 
 
 def build_filter_complex(edl, source_index, height, overlays=(), overlay_size=None,
-                         hwupload=False):
+                         hwupload=False, target=None, audio_map=None,
+                         silence_index=None):
     """Build the filter_complex string for the whole timeline.
 
     source_index maps each source path to its ffmpeg -i input index. Each
-    segment is trimmed from its source, PTS-reset, scaled to height when given
-    (even width, square pixels; height None keeps native size), and given an
-    in/out afade of fade_ms at its boundaries; all segments then concat.
+    segment is trimmed from its source, PTS-reset, sized, given an in/out
+    afade of fade_ms at its boundaries, and audio-normalized; all segments
+    then concat.
+
+    Sizing: when target=(W,H) is given every segment is normalized to that one
+    frame (scale to fit with force_original_aspect_ratio=decrease, then pad and
+    centre to WxH, setsar=1), so sources of different frame sizes or aspect
+    ratios all become identical WxH inputs and the concat filter accepts them
+    (mixed cam + screencast). target is set by the caller only when the
+    timeline draws on more than one distinct source; the single-source fast
+    path keeps the plain scale=-2:height (even width, square pixels; height
+    None keeps native size), unchanged.
+
+    Audio: a source with no audio stream (audio_map[source] is False and a
+    silence_index is supplied) draws silence from the shared anullsrc input at
+    silence_index instead of a real [idx:a], so screen recordings without audio
+    do not fail with "Stream specifier :a matches no streams". Every audio
+    chain ends in aresample=48000,aformat=channel_layouts=stereo so sources
+    with different sample rates or channel layouts (44.1k cam + 48k screencast)
+    concat cleanly. audio_map None means every source has audio (the historic
+    behavior).
 
     overlays (optional) are dicts {index, start, dur, image} whose 'index' is
     the ffmpeg input index of the overlay file; each is composited over the
@@ -226,6 +245,7 @@ def build_filter_complex(edl, source_index, height, overlays=(), overlay_size=No
     up the device (encoder_init_flags).
     """
     fade = edl.get("fade_ms", 30) / 1000.0
+    tw, th = target if target else (None, None)
     parts, vlabels, alabels = [], [], []
     for i, seg in enumerate(edl["segments"]):
         idx = source_index[seg["source"]]
@@ -238,21 +258,35 @@ def build_filter_complex(edl, source_index, height, overlays=(), overlay_size=No
             f"[{idx}:v]trim=start={_fmt(start)}:end={_fmt(end)},"
             f"setpts=PTS-STARTPTS"
         )
-        if height:
-            vchain += f",scale=-2:{height}"
-        vchain += f",setsar=1[{vlab}]"
+        if target:
+            # Normalize every segment to one frame so mixed-size sources concat.
+            vchain += (
+                f",scale={tw}:{th}:force_original_aspect_ratio=decrease,"
+                f"pad={tw}:{th}:(ow-iw)/2:(oh-ih)/2,setsar=1[{vlab}]"
+            )
+        elif height:
+            vchain += f",scale=-2:{height},setsar=1[{vlab}]"
+        else:
+            vchain += f",setsar=1[{vlab}]"
         parts.append(vchain)
-        afade = (
-            f"[{idx}:a]atrim=start={_fmt(start)}:end={_fmt(end)},"
+        # Audio: real stream, or shared silence for an audio-less source.
+        if (silence_index is not None and audio_map is not None
+                and not audio_map.get(seg["source"], True)):
+            aidx, a_start, a_end = silence_index, 0.0, dur
+        else:
+            aidx, a_start, a_end = idx, start, end
+        achain = (
+            f"[{aidx}:a]atrim=start={_fmt(a_start)}:end={_fmt(a_end)},"
             f"asetpts=PTS-STARTPTS"
         )
         if f > 0:
-            afade += (
+            achain += (
                 f",afade=t=in:st=0:d={_fmt(f)}"
                 f",afade=t=out:st={_fmt(dur - f)}:d={_fmt(f)}"
             )
-        afade += f"[{alab}]"
-        parts.append(afade)
+        achain += ",aresample=48000,aformat=channel_layouts=stereo"
+        achain += f"[{alab}]"
+        parts.append(achain)
         vlabels.append(f"[{vlab}]")
         alabels.append(f"[{alab}]")
     n = len(edl["segments"])
@@ -293,7 +327,7 @@ PREVIEW_ENCODE = ["-c:v", "libx264", "-crf", "28", "-preset", "veryfast",
 
 def build_command(edl, project_dir, output, height, overlays=(),
                   overlay_size=None, encode=None, extra_output_flags=(),
-                  encoder=None):
+                  encoder=None, target=None, audio_map=None):
     """Assemble (ffmpeg_argv, source_index) for one render invocation.
 
     encode replaces the default preview encode args (libx264 crf 28 veryfast
@@ -301,6 +335,16 @@ def build_command(edl, project_dir, output, height, overlays=(),
     cap (looped/synthetic sources must never run open-ended); video overlay
     inputs are -t capped to the beat's dur too, so decode stops at the enable
     window. -movflags +faststart is added for .mp4/.mov outputs.
+
+    target (optional) is the (W,H) frame every segment is normalized to, for
+    mixed-size sources; the caller sets it only for multi-source timelines and
+    passes the SAME value to every chunk so the chunk concat stays exact.
+
+    audio_map (optional) maps each source path to whether it has an audio
+    stream (probe_has_audio). Any audio-less source is fed synthesized silence
+    from a single trimmed anullsrc input added after the real sources; the -t
+    cap on that input keeps the synthetic source from running open-ended.
+    audio_map None means every source has audio.
 
     encoder (optional) is the encoder name the encode args target; it only
     matters for encoders that need device setup and hardware frames (vaapi
@@ -312,13 +356,22 @@ def build_command(edl, project_dir, output, height, overlays=(),
         if seg["source"] not in distinct:
             distinct.append(seg["source"])
     source_index = {src: i for i, src in enumerate(distinct)}
+    need_silence = bool(audio_map) and any(
+        not audio_map.get(src, True) for src in distinct)
     argv = ["ffmpeg", "-y", *encoder_init_flags(encoder)]
     for src in distinct:
         argv += ["-i", str((project_dir / src).resolve())]
+    silence_index = None
+    if need_silence:
+        silence_index = len(distinct)
+        total = sum(seg["end"] - seg["start"] for seg in edl["segments"])
+        argv += ["-f", "lavfi", "-t", _fmt(total),
+                 "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"]
+    base = len(distinct) + (1 if need_silence else 0)
     ovs = []
     for k, ov in enumerate(overlays):
         entry = dict(ov)
-        entry["index"] = len(distinct) + k
+        entry["index"] = base + k
         if entry.get("image"):
             argv += ["-loop", "1", "-t", _fmt(entry["dur"]),
                      "-i", str(entry["path"])]
@@ -328,7 +381,9 @@ def build_command(edl, project_dir, output, height, overlays=(),
     argv += [
         "-filter_complex",
         build_filter_complex(edl, source_index, height, ovs, overlay_size,
-                             hwupload=encoder_needs_hwupload(encoder)),
+                             hwupload=encoder_needs_hwupload(encoder),
+                             target=target, audio_map=audio_map,
+                             silence_index=silence_index),
         "-map", "[outv]", "-map", "[outa]",
     ]
     argv += list(encode) if encode else list(PREVIEW_ENCODE)
@@ -609,6 +664,32 @@ def probe_dims(path):
         return None
     w, h = streams[0].get("width"), streams[0].get("height")
     return (int(w), int(h)) if w and h else None
+
+
+def probe_has_audio(path):
+    """True if the file has at least one audio stream.
+
+    On a probe failure (missing or unreadable file, or no ffprobe) returns
+    True, so ffmpeg surfaces the real open error at render time rather than
+    this wrapper silently synthesizing silence for a file that will fail
+    anyway. A file that exists but carries no audio stream returns False,
+    which is the signal for the renderers to feed it synthesized silence."""
+    try:
+        proc = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "a:0",
+             "-show_entries", "stream=index", "-print_format", "json",
+             str(path)],
+            capture_output=True, text=True,
+        )
+    except OSError:
+        return True
+    if proc.returncode != 0:
+        return True
+    try:
+        streams = json.loads(proc.stdout).get("streams") or []
+    except json.JSONDecodeError:
+        return True
+    return bool(streams)
 
 
 def extract_boundary_frames(output, edl, out_dir):
