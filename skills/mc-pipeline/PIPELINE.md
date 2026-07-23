@@ -93,7 +93,7 @@ If the config exists but a key this stage needs is missing or empty, ask for jus
 - Everything is themed through `{brand-path}/tokens.json`. Component sourcing rule: registries and open libraries first, author from scratch only when nothing fits.
 - Engine workspaces (the pinned HyperFrames project) live at `{engines-path}`; mc-setup or the first graphics run initializes them.
 - Remotion was a second engine through 0.x and was removed on 2026-07-22: its license is free only up to 3 people, and its React authoring model bought nothing in a frame-deterministic renderer. Rationale in `mc-graphics/engines/hyperframes.md`.
-- Compatibility alias (unconditional, any vintage): `remotion` is a permanent alias for `hyperframes` wherever an engine is named — a beat-table `engine` value OR a format profile's `engine_overlays`/`engine_stingers` frontmatter. A studio configured before 1.1.0 keeps its own copied profiles that may still say `remotion`; every skill reads that as `hyperframes` and no creator file is rewritten. There is no Remotion engine doc or workspace to route to.
+- Compatibility alias (unconditional, any vintage): `remotion` is a permanent alias for `hyperframes` wherever an engine is named — a beat-table `engine` value OR a format profile's `engine_overlays`/`engine_stingers` frontmatter. A studio configured before 2.0.0 keeps its own copied profiles that may still say `remotion`; every skill reads that as `hyperframes` and no creator file is rewritten. There is no Remotion engine doc or workspace to route to.
 
 ## The beat table (engine-neutral graphics contract)
 

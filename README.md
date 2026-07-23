@@ -2,13 +2,19 @@
 
 # BMad Manticore
 
-[![Version](https://img.shields.io/badge/version-1.0.1-blue)](.claude-plugin/marketplace.json)
+[![Version](https://img.shields.io/badge/version-2.0.0-blue)](.claude-plugin/marketplace.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python Version](https://img.shields.io/badge/python-%3E%3D3.11-blue?logo=python&logoColor=white)](https://www.python.org)
 [![uv](https://img.shields.io/badge/uv-package%20manager-blueviolet?logo=uv)](https://docs.astral.sh/uv/)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-7289da?logo=discord&logoColor=white)](https://discord.gg/gk8jAdXWmj)
 
 **From brain dump to a rendered, graphics-rich video, in your own words.**
+
+## New in 2.0
+
+Manticore now runs entirely on [HyperFrames](https://hyperframes.heygen.com) for motion graphics, with its Agent Skills installed and favored at setup so the agent can reach the whole toolkit: color grading, background removal, WebGL shader transitions, kinetic captions, data-viz, 3D device mockups, HDR and 4K delivery, and a 100-plus block catalog. It all runs locally, with no account or credits. Remotion is retired; its license and React model no longer fit a frame-deterministic pipeline. The final render is now incremental too (a fix on a long video re-renders in seconds, not minutes), finals are loudness-normalized by default, and Windows, Linux, and Intel Mac lanes are code-complete. See the [changelog](CHANGELOG.md) for everything that changed.
+
+Upgrading from an earlier version: back up anything custom you want to keep, then remove the `_bmad/` and `_bmad-output/` folders from your studio and reinstall (see [Install](#install)). Start your agent and say `hey manny lets get this all set up!`, then follow onboarding. Your brand kit, voice bible, and format profiles live in your studio folder (not in `_bmad/`), so they survive the reinstall: onboarding finds them, and if it does not, point it at them so it can reuse or update them.
 
 Talk through your video idea for twenty minutes, or hand over footage you already have. Get back a script in your own words, a word-level cut plan for your raw footage, a watchable preview render of every iteration, brand-themed motion graphics with CTAs placed where they work, a title/thumbnail package, and an offered final-quality render at the end. The editor timeline export and all cut assets are always produced alongside, so you can move into your own editor at any step. You approve every taste decision along the way.
 
