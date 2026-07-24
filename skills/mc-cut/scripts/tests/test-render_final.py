@@ -195,6 +195,32 @@ class TestSegmentIdentity(unittest.TestCase):
         self.assertNotEqual(core.segment_id(e, s),
                             core.segment_id(e2, self.seg(e2, 0, 2)))
 
+    def test_id_distinguishes_overlays_on_identical_slices(self):
+        # Two content-identical slices (same source spans) that carry DIFFERENT
+        # overlays must get DIFFERENT ids, so neither is deduped onto the other's
+        # persisted .ts and each overlay configuration is encoded on its own.
+        e = edl_n(4)
+        plain = {"seg_start": 0, "seg_end": 2, "offset": 0.0, "duration": 20.0,
+                 "overlays": []}
+        with_ov = {"seg_start": 0, "seg_end": 2, "offset": 0.0, "duration": 20.0,
+                   "overlays": [{"id": "b1", "start": 1.0, "dur": 0.5,
+                                 "image": True, "path": "g/b1.png"}]}
+        other_ov = {"seg_start": 0, "seg_end": 2, "offset": 0.0, "duration": 20.0,
+                    "overlays": [{"id": "b2", "start": 1.0, "dur": 0.5,
+                                  "image": True, "path": "g/b2.png"}]}
+        self.assertNotEqual(core.segment_id(e, plain), core.segment_id(e, with_ov))
+        self.assertNotEqual(core.segment_id(e, with_ov),
+                            core.segment_id(e, other_ov))
+        # Identical slice + identical overlay layout -> same id (dedup stands).
+        same = dict(with_ov, offset=500.0)  # different position, same content
+        self.assertEqual(core.segment_id(e, with_ov), core.segment_id(e, same))
+        # The overlay FILE digest is not part of the id: re-rendering the graphic
+        # keeps the filename stable (input_hash catches the change instead).
+        redrawn = {"seg_start": 0, "seg_end": 2, "offset": 0.0, "duration": 20.0,
+                   "overlays": [{"id": "b1", "start": 1.0, "dur": 0.5,
+                                 "image": True, "path": "g/b1-v2.png"}]}
+        self.assertEqual(core.segment_id(e, with_ov), core.segment_id(e, redrawn))
+
     def test_input_hash_reflects_overlay_file_and_render_key(self):
         e = edl_n(4)
         seg = {"seg_start": 0, "seg_end": 2, "offset": 0.0, "duration": 20.0,

@@ -560,12 +560,31 @@ def segment_identity(edl, seg):
     }
 
 
+def overlay_placement(seg):
+    """The position-independent overlay layout of a render-segment: for each
+    overlay landing in it, its id, chunk-local start, dur, and image flag,
+    sorted. The overlay FILE digest is deliberately excluded (that lives in
+    segment_input_hash): re-rendering a graphic must dirty the segment's cache
+    entry but must NOT change its filename, so the persisted .ts is reused."""
+    return sorted(
+        ([ov.get("id"), round(ov["start"], 6), round(ov["dur"], 6),
+          bool(ov.get("image"))] for ov in seg.get("overlays", [])),
+        key=lambda o: (o[1], str(o[0])),
+    )
+
+
 def segment_id(edl, seg):
     """Stable filesystem-safe id for a render-segment, derived from its content
-    identity (not its position), so an identical slice keeps the same id and
-    persisted file across runs. Duplicate slices (the same source span kept
-    twice) legitimately share one id and one file."""
-    raw = json.dumps(segment_identity(edl, seg), sort_keys=True).encode("utf-8")
+    identity and its overlay layout (never its timeline position), so an
+    identical slice carrying identical overlays keeps the same id and persisted
+    file across runs. Two content-identical slices are distinct ids when
+    DIFFERENT overlays land on them, so each overlay configuration owns its own
+    persisted .ts and neither is deduped onto the other. Duplicate slices with
+    the same overlay layout (the same span kept twice, same graphics) legitimately
+    share one id and one file."""
+    key = {"identity": segment_identity(edl, seg),
+           "overlays": overlay_placement(seg)}
+    raw = json.dumps(key, sort_keys=True).encode("utf-8")
     return "seg-" + hashlib.sha256(raw).hexdigest()[:16]
 
 
