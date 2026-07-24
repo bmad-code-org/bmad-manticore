@@ -2,25 +2,37 @@
 
 All notable changes to BMad Manticore are documented here. Dates are ISO (YYYY-MM-DD).
 
-## Unreleased
+## 2.0.0 - Unreleased
 
-### Cross-platform: Windows, Linux, and Intel Mac lanes (code-complete, pending real-hardware validation)
+The big release: one motion-graphics engine with the full HyperFrames toolkit behind it, cross-platform support, a final render that only re-does what changed, and delivery polish (loudness, captions, OBS alpha). Upgrading from 1.x is a clean reinstall (see README): your brand, voice bible, and format profiles live in your studio folder, not in `_bmad/`, so they survive and onboarding picks them back up.
 
-- Transcription is cross-platform: transcribe.py gains an onnx-asr provider running the same parakeet-tdt-0.6b-v3 weights as an ONNX conversion, so verbatim fillers and 80 ms word timestamps carry over on Windows, Linux, and Intel Macs. New default provider `auto` picks parakeet-mlx on macOS Apple Silicon (byte-identical to the 1.0 reference lane) and onnx-asr everywhere else; dependencies select per platform via PEP 508 markers, CUDA machines escalate with `uv run --with "onnx-asr[gpu,hub]" python <script-path>` (the `python` command skips the script's cpu-extra dependency so onnxruntime-gpu never co-installs with onnxruntime, and the script warns when an NVIDIA GPU is visible but CUDA is unavailable), long audio is chunked in 20 s windows with 2 s overlap and merged deterministically with a seam-repair pass so boundary words are never duplicated or dropped, and words.json stays byte-compatible across lanes. Honesty rule: when the ONNX runtime exposes no per-token scores, every confidence reads 1.0 (no signal), never a fabricated number. The `[transcription]` default moved from "parakeet-mlx" to "auto"; whisper.cpp and faster-whisper are no longer the documented fallbacks.
-- Install-time platform detection: check_deps.py now detects OS, CPU architecture, and GPU vendor (nvidia-smi, /sys/class/drm PCI ids, wmic/PowerShell fallbacks) and emits a platform verdict, in `--json` as a kebab-case `platform` object (os, arch, apple-silicon, gpu, gpu-detail, recommended{stack-file, transcription, torch-index, encoder-ladder, svg-rasterizer, fonts}) and as a table-mode stack block. Three new stack reference files at skills/mc-setup/references/stack-{macos,windows,linux}.md carry the per-OS defaults, Windows notes (short engines-path, LongPathsEnabled, gyan.dev build, OBS over Game Bar), Linux notes (PipeWire/Wayland capture, noto-color-emoji, the free-Resolve H.264/HEVC/AAC codec caveat), vMix and Wirecast alpha notes, and the per-OS DaVinci Resolve Fusion Scripts paths for the free-edition scripted-import lane. mc-setup reads the recommended stack file during the interview.
-- Hardware encoder ladders: the final render and the VFR remux pick per-OS hardware encoders validated by a real one-frame test encode (Windows: h264_nvenc, then h264_qsv, then h264_amf; Linux: h264_nvenc, then h264_vaapi wired end to end with hwupload; libx264 fallback everywhere). The preview render, plain and graphics-composited alike, stays libx264 crf 28 veryfast by design on every OS. macOS videotoolbox behavior is byte-for-byte unchanged.
-- mc-audio portability: the audio-lab venv interpreter resolves per OS (.venv/bin/python vs .venv\Scripts\python.exe), Windows machines with an NVIDIA GPU install torch from the PyTorch cu126 index (roughly 2.5 to 3 GB extra, surfaced in the consent message and the `--dry-run` torch field), and MusicGen/AudioLDM2 pick cuda, then mps, then cpu. macOS behavior is unchanged.
-- Small portability fixes: edl_to_fcpxml.py emits valid Windows file URIs (file:///C:/... and UNC shares) via Path.as_uri() with byte-identical POSIX output; farm_asset.py resolves registered tools with a PATH lookup (Windows npm .cmd/.exe shims launch by bare name), documents POSIX quoting for headless templates on every OS, and refuses to pass arguments containing cmd.exe metacharacters (embedded double quotes, % ^ & | < >) to a .cmd/.bat shim, failing loudly with a re-register hint instead of letting cmd.exe corrupt or expand them; verify_ograf.py prints per-OS manual verification steps and, from a human terminal, serves the package and opens preview.html in the default browser itself. transcribe.py, edl_to_fcpxml.py, and render_final.py read and write their JSON, FCPXML, and concat-list artifacts with explicit UTF-8 so non-ASCII transcripts and paths survive on Windows locale codecs (cp1252).
+### Motion graphics: one engine, the whole HyperFrames toolkit
 
-### Added
+- Consolidated on HyperFrames as the single motion-graphics engine; Remotion is retired. Remotion's license carried a real obligation for teams of four or more, and its React model bought nothing in a frame-deterministic renderer where state is just a function of frame index. Every job it held (brand stinger, karaoke captions, HTML/SVG comps) is a HyperFrames comp, and the OBS-plus-editor dual alpha target is unchanged. Nothing to migrate: `remotion` is a permanent alias for `hyperframes` everywhere an engine is named, so existing studios keep working untouched.
+- HyperFrames' own Agent Skills are installed at setup and favored, so the agent knows the engine's full, current capability surface from the start instead of a hand-written summary that goes stale. That surface is large and mostly new to the pipeline: the 100-plus block catalog (code animations, WebGL shader transitions, caption styles, lower thirds, social cards, data-viz maps, VFX, 3D device mockups) plus footage-facing effects the pipeline never surfaced before (color grading with LUTs, grain, and vignette; background removal; HTML-in-Canvas WebGL), and HDR10 and 4K delivery. It all runs locally; no HeyGen account or credits, ever.
 
-- Final renders are loudness-normalized by default to -14 LUFS (two-pass ffmpeg loudnorm, TP -1.5, LRA 11; audio-only second pass with the video stream copied), configurable via `[render]` loudness-target and disable-able via `[render]` loudnorm = false or `--no-loudnorm`. Preview renders are never normalized. Silent audio skips the pass with a warning instead of failing.
-- mc-package emits uploadable captions and a publishable transcript from the edited timeline: the new stdlib-only captions.py maps each EDL segment's word spans onto output-timeline times (reordered and multi-source edits included) and writes packaging/captions/final.srt, final.vtt, and transcript.md. Caption defaults: 42 chars per line, 2 lines, 1 to 7 s cues, splits at sentence ends, pauses, and cuts. A light filler/stutter cleanup applies to the caption rendition only (`--no-clean` keeps verbatim); transcript/words.json is never modified.
-- mc-stream-pack produces and verifies the OBS WebM VP9 alpha deliverable from a ProRes 4444 master in one command (render_verify.py `--transcode-webm`, with `--webm-crf`), with clear errors when ffmpeg lacks libvpx-vp9 or the master has no alpha, plus a pixfmt-failure hint carrying the exact re-encode flags. The stream-pack copy of render_verify.py is now a superset of mc-graphics' copy.
+### Faster iteration
+
+- The final render is incremental. The timeline is cached as content-addressed segments, so a re-render re-encodes only what actually changed (a tweaked graphic, a re-cut region) and reuses the rest. A fix on a long video is a seconds-long render instead of an end-to-end one, and boundaries are stable, so an edit early in the timeline does not invalidate everything after it. `--no-cache` forces a full rebuild.
+- Final renders are loudness-normalized to -14 LUFS by default (the YouTube reference), so deliverables land at a consistent, platform-ready level with no manual pass. The preview is never normalized; `[render]` loudness-target and loudnorm are the knobs.
+
+### Cross-platform: Windows, Linux, and Intel Mac
+
+Code-complete and unit-tested; still pending validation on real Windows and Linux hardware, so treat the first run as a shakedown and report what you hit.
+
+- Transcription runs everywhere: the reference parakeet weights via parakeet-mlx on Apple Silicon and onnx-asr (same weights) on Windows, Linux, and Intel Macs, CPU by default with a one-flag CUDA escalation. Verbatim fillers and word timestamps carry over identically. The default lane is now `auto`.
+- The final render uses per-OS hardware encoders validated by a real one-frame test encode (nvenc, qsv, amf on Windows; nvenc, vaapi on Linux) with a libx264 fallback everywhere; macOS videotoolbox is unchanged.
+- Setup detects your OS, CPU, and GPU and recommends the right stack, with per-OS notes for Windows, Linux, vMix and Wirecast, and the free DaVinci Resolve edition.
+- The audio farm, timeline export, and asset farming are portable to Windows and Linux paths, shells, and locales.
+
+### Packaging and delivery
+
+- mc-package emits uploadable captions and a publishable transcript from the edited timeline (SRT, VTT, and a cleaned Markdown transcript), mapped onto output-timeline times across reordered and multi-source edits; the source words.json is never modified.
+- mc-stream-pack produces and verifies the OBS WebM (VP9 alpha) deliverable from a ProRes 4444 master in one command, with clear errors when ffmpeg lacks libvpx-vp9 or the master has no alpha.
 
 ### Documentation
 
-- README platform matrix and the user guide rewritten for the cross-platform reality; the Resolve handoff reference gains the free-edition Fusion Scripts install paths, the Linux free-edition codec caveat, and an opt-in pointer to the community samuelgursky/davinci-resolve-mcp server for Studio users (Manticore itself still requires no MCP server).
+- README carries a 2.0 announcement and the upgrade path; the platform matrix and user guide are rewritten for cross-platform reality; the Resolve handoff reference gains free-edition Fusion Scripts paths and an optional Resolve-MCP pointer (Manticore itself needs no MCP server).
 
 ## 1.0.1 - 2026-07-07
 

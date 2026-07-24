@@ -16,7 +16,7 @@ SCRIPT = Path(__file__).resolve().parent.parent / "merge_profile_frontmatter.py"
 
 SHIPPED = """---
 format: talking-head
-stages: [new, braindump, outline, script, record, cut, beats, graphics, assets, package, final, retro]
+stages: [new, braindump, outline, script, record, cut, beats, assets, graphics, package, final, retro]
 engine_overlays: hyperframes
 generated_broll: allowed
 beat-types: [popup, diagram, lower-third, stat-card, cta]
@@ -34,8 +34,8 @@ Shipped prose that must never reach the studio copy.
 
 STUDIO = """---
 format: talking-head
-stages: [new, braindump, outline, script, record, cut, beats, graphics, assets, package, final, retro]
-engine_overlays: remotion
+stages: [new, braindump, outline, script, record, cut, beats, assets, graphics, package, final, retro]
+engine_overlays: ograf
 generated_broll: banned
 ---
 
@@ -76,7 +76,7 @@ class TestMerge(unittest.TestCase):
         merged = self.studio.read_text()
         self.assertIn("beat-types: [popup, diagram, lower-third, stat-card, cta]", merged)
         self.assertIn('medium: "20-45s"', merged)
-        self.assertIn("engine_overlays: remotion", merged)      # studio value wins
+        self.assertIn("engine_overlays: ograf", merged)      # studio value wins
         self.assertIn("generated_broll: banned", merged)        # studio value wins
         self.assertNotIn("Shipped prose", merged)
         self.assertIn("the creator's hard-won learning stays put", merged)

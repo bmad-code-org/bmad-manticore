@@ -44,7 +44,7 @@ Riffs graphic and treatment ideas with the creator first, then builds the beat t
 
 ### mc-graphics
 
-Executes the approved beat table in HyperFrames / Remotion / HTML / design-prompting; frame-verified ProRes 4444 alpha overlays plus HANDOFF.md. Routes whooshes and beds to mc-audio. Needs gate 3 approved.
+Executes the approved beat table in HyperFrames / HTML / design-prompting; frame-verified ProRes 4444 alpha overlays plus HANDOFF.md. Routes whooshes and beds to mc-audio. Needs gate 3 approved.
 
 ### mc-assets
 

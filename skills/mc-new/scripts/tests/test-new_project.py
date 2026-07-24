@@ -15,14 +15,14 @@ from pathlib import Path
 SCRIPT = Path(__file__).resolve().parent.parent / "new_project.py"
 
 PROFILE = """---
-stages: [new, braindump, outline, script, record, cut, beats, graphics, assets, package, final, retro]
+stages: [new, braindump, outline, script, record, cut, beats, assets, graphics, package, final, retro]
 ---
 
 # Talking head
 """
 
 VOD_PROFILE = """---
-stages: [new, cut, beats, graphics, assets, package, final, retro]
+stages: [new, cut, beats, assets, graphics, package, final, retro]
 ---
 
 # Livestream VOD
@@ -148,7 +148,7 @@ class TestNewProject(unittest.TestCase):
         self._new(slug="vod-episode", fmt="livestream-vod", extra=["--ingest", str(footage)])
         state = self._state("vod-episode")
         self.assertEqual(state["stages"],
-                         ["new", "cut", "beats", "graphics", "assets", "package", "final", "retro"])
+                         ["new", "cut", "beats", "assets", "graphics", "package", "final", "retro"])
         self.assertEqual(state["stage"], "cut")
         self.assertEqual(state["stages_done"], ["new"])
         self.assertEqual(state["sources"], [{

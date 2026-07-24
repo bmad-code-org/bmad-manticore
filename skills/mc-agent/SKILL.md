@@ -28,7 +28,7 @@ The full contract lives with mc-pipeline; invoke it for real state and routing. 
 | record | the creator | |
 | cut | mc-cut | gate 2: cutplan |
 | beats | mc-beats | gate 3: beats |
-| graphics, assets | mc-graphics, mc-assets | |
+| assets, graphics | mc-assets, mc-graphics | |
 | package | mc-package (may start any time after gate 1) | |
 | stream-pack | mc-stream-pack (livestream-pack lane only) | |
 | final | the creator, with an offered pipeline render | gate 4: final |

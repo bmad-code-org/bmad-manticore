@@ -1,6 +1,6 @@
 ---
 name: mc-setup
-description: First-run (or any-time) configuration for the Manticore video pipeline. Creates and updates the studio config ([modules.manticore] in {project-root}/_bmad/custom/config.toml), verifies dependencies and platform support, runs the onboarding interview (basics, render consent, video style, CTAs, audio lanes), builds the brand for real (tokens, Production Bible, headshots, guided voice bible), registers the creator's generation CLIs with end-to-end verification, scaffolds .env.example, and migrates 0.x studios. Run when any mc-* skill reports missing config, or to change tools later.
+description: First-run (or any-time) configuration for the Manticore video pipeline. Creates and updates the studio config ([modules.manticore] in {project-root}/_bmad/custom/config.toml), verifies dependencies and platform support, installs the HyperFrames graphics skills, runs the onboarding interview (basics, render consent, video style, CTAs, audio lanes), builds the brand for real (tokens, Production Bible, headshots, guided voice bible), registers the creator's generation CLIs with end-to-end verification, scaffolds .env.example, and migrates 0.x studios. Run when any mc-* skill reports missing config, or to change tools later.
 ---
 
 # mc-setup
@@ -36,7 +36,7 @@ An existing `[modules.manticore]` that is missing any of the 1.0 tables (`[rende
 - A pre-1.0 series or thumbnail template at the brand root (for example `thumbnail-template.md`) predates the `{brand-path}/templates/<series>.md` contract: offer to move it there, named for the series it describes, so mc-package finds it.
 - Run the delta interview: step 3b (render consent), then step 3c (the video style interview), then step 3d (audio lanes).
 - Scaffold `{brand-path}/production-bible.md` per step 4, seeded from the brand assets that already exist (tokens.json, shipped overlays, exemplars, format-profile learnings) plus the step 3c answers, not from a blank slate.
-- Offer, without forcing, the other new builds: headshot collection (step 4), the guided voice bible (step 4b), `.env.example` (step 7).
+- Offer, without forcing, the other new builds: the HyperFrames graphics skills (step 2b), headshot collection (step 4), the guided voice bible (step 4b), `.env.example` (step 7).
 - Leave every other existing value untouched; those are already the creator's answers.
 
 Finish with step 8 as usual so the migrated config is verified and the pending gaps are reported.
@@ -46,6 +46,14 @@ Finish with step 8 as usual so the migrated config is verified and the pending g
 Bootstrap first: check `uv --version`. If uv is missing, offer to install it; otherwise the official installer from docs.astral.sh/uv, and wait for the creator's confirmation; every pipeline script runs through uv, so nothing works without it.
 
 Then run `uv run {skill-root}/scripts/check_deps.py`. Report what is missing with the exact install command (brew/apt/winget as fits the platform). Install nothing without the creator confirming each item. The report ends with a platform verdict: detected OS, CPU architecture, and GPU vendor, plus the recommended stack file (`{skill-root}/references/stack-macos.md`, `stack-windows.md`, or `stack-linux.md`) and the platform-specific defaults it implies (transcription lane, torch index, encoder ladder, SVG rasterizer, fonts approach). Read the named stack file now and hold it as context for the rest of setup. If this machine is not Apple Silicon, relay the script's pointer honestly: the parakeet-mlx reference lane will not run here, and the recommended lane is onnx-asr with the same parakeet-tdt-0.6b-v3 weights (implemented; verbatim fillers and word timestamps carry over, CPU or CUDA per the verdict). Carry that honesty into step 3's transcription question.
+
+### 2b. HyperFrames graphics skills
+
+HyperFrames is the graphics engine, and its Agent Skills carry the agent's current, self-refreshing knowledge of everything it can do (the block catalog, WebGL transitions, color grading, background removal, HTML-in-Canvas, the authoring patterns). Install them now, provided node and npx are present (step 2), so that capability knowledge is live from the beats and graphics stages onward instead of only after the first graphics run. Confirm before installing (it writes skill files into the project); the install is idempotent, a re-run refreshes rather than duplicates:
+
+- Install and favor the full catalog: `npx skills add heygen-com/hyperframes --all --full-depth`. A creator who wants a lighter footprint can take just the maintained core set instead: `npx hyperframes skills update`.
+- Everything here runs on the local CLI; no HeyGen account or credits. The engine WORKSPACE itself (`{engines-path}/hyperframes/`, a multi-GB npm install) still builds lazily on the first graphics run; this step installs only the lightweight skill knowledge so the whole capability surface is known from the start.
+- If node or npx is missing, say HyperFrames graphics need them and defer the skills to the first graphics run rather than blocking setup.
 
 ### 3. The basics interview
 
@@ -158,7 +166,7 @@ Write the interview results as the `[modules.manticore]` table (with its sub-tab
 
 Close with the honest runnability report:
 
-- Locked behavior: what will actually happen on the first project with these settings. Render-first preview and offered final per `[render]`, the graphics-frequency tier, the CTA inventory, the transcription lane and whether THIS machine can run it, the audio lanes and whether the engine workspace is built yet, the editor timeline format.
+- Locked behavior: what will actually happen on the first project with these settings. Render-first preview and offered final per `[render]`, the graphics-frequency tier, the CTA inventory, the transcription lane and whether THIS machine can run it, the audio lanes and whether the engine workspace is built yet, the editor timeline format, and whether the HyperFrames graphics skills are installed (or deferred to the first graphics run).
 - Lane status: implemented vs planned for every configured lane, straight from the customize.toml comments. Never claim a planned lane works.
 - Pending gaps, flagged loudly: missing headshots (thumbnails are blocked), unbuilt voice bible, placeholder Production Bible sections, unverified tools, empty asset lanes (mc-assets will stop and ask).
 - Capability note: check whether the harness has browser automation available; packaging research degrades without it, and the report says so when it is absent.

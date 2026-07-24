@@ -2,13 +2,19 @@
 
 # BMad Manticore
 
-[![Version](https://img.shields.io/badge/version-1.0.1-blue)](.claude-plugin/marketplace.json)
+[![Version](https://img.shields.io/badge/version-2.0.0-blue)](.claude-plugin/marketplace.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python Version](https://img.shields.io/badge/python-%3E%3D3.11-blue?logo=python&logoColor=white)](https://www.python.org)
 [![uv](https://img.shields.io/badge/uv-package%20manager-blueviolet?logo=uv)](https://docs.astral.sh/uv/)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-7289da?logo=discord&logoColor=white)](https://discord.gg/gk8jAdXWmj)
 
 **From brain dump to a rendered, graphics-rich video, in your own words.**
+
+## New in 2.0
+
+Manticore now runs entirely on [HyperFrames](https://hyperframes.heygen.com) for motion graphics, with its Agent Skills installed and favored at setup so the agent can reach the whole toolkit: color grading, background removal, WebGL shader transitions, kinetic captions, data-viz, 3D device mockups, HDR and 4K delivery, and a 100-plus block catalog. It all runs locally, with no account or credits. Remotion is retired; its license and React model no longer fit a frame-deterministic pipeline. The final render is now incremental too (a fix on a long video re-renders in seconds, not minutes), finals are loudness-normalized by default, and Windows, Linux, and Intel Mac lanes are code-complete. See the [changelog](CHANGELOG.md) for everything that changed.
+
+Upgrading from an earlier version: back up anything custom you want to keep, then remove the `_bmad/` and `_bmad-output/` folders from your studio and reinstall (see [Install](#install)). Start your agent and say `hey manny lets get this all set up!`, then follow onboarding. Your brand kit, voice bible, and format profiles live in your studio folder (not in `_bmad/`), so they survive the reinstall: onboarding finds them, and if it does not, point it at them so it can reuse or update them.
 
 Talk through your video idea for twenty minutes, or hand over footage you already have. Get back a script in your own words, a word-level cut plan for your raw footage, a watchable preview render of every iteration, brand-themed motion graphics with CTAs placed where they work, a title/thumbnail package, and an offered final-quality render at the end. The editor timeline export and all cut assets are always produced alongside, so you can move into your own editor at any step. You approve every taste decision along the way.
 
@@ -20,7 +26,7 @@ Manticore is an AI video production pipeline for content creators, packaged as a
 
 - A script woven from your own recorded brain-dump words under a quote-or-cut contract, linted against a blacklist of LLM tells and a 16-rule craft checklist. It sounds like you because it is you.
 - A cut plan that itemizes only the calls you might disagree with, each with a timestamp and the quoted words: "trailing 'so' at 42:20, keep or cut?"
-- A render at every step: a fast low-res preview after every cut approval, the same preview re-rendered with graphics composited once the graphics stage has rendered the overlays, and a final-quality render offered at the last gate. The editor timeline export, edl.json, cutplan, and overlays are always written too, so jumping into your editor never loses work.
+- A render at every step: a fast low-res preview after every cut approval, the same preview re-rendered with graphics composited once the graphics stage has rendered the overlays, and a final-quality render offered at the last gate. The final render is incremental: the timeline is cached as content-addressed segments, so re-rendering after a tweaked graphic or a re-cut region touches only what changed, turning a fix on a long video into a seconds-long render. The editor timeline export, edl.json, cutplan, and overlays are always written too, so jumping into your editor never loses work.
 - Motion graphics planned under creativity mandates and your visual density tier, styled by your Production Bible, delivered as brand-themed alpha overlays (ProRes 4444, works in every NLE), anchored to the exact words you speak.
 - CTAs planned like beats: your configured CTA inventory placed at research-backed seams, approved by you in the same gate as every other graphic.
 - Titles, thumbnails (A/B pairs for series), description, chapters, and uploadable SRT/VTT captions with a publishable transcript of the edited timeline, built around a packaging promise you approved before the script was written.
@@ -54,7 +60,7 @@ my-studio/                        <- install here, run everything from here
                    exemplars/, headshots/
     formats/    <- your editable format profiles (learnings accumulate here)
     projects/   <- one folder per video, fully self-contained
-    engines/    <- HyperFrames / Remotion workspaces
+    engines/    <- HyperFrames / OGraf workspaces
 ```
 
 Then say "talk to Manny". Manny the Manticore (mc-agent) is the studio's director and front door: he detects that the studio is not set up yet and walks you through mc-setup's onboarding interview (identity, editor, render consent, video style, brand, headshots, voice bible, tools), turns your first idea into a project, routes existing footage into a footage-first project, and drives every stage from there. You never have to know which skill does what.
@@ -89,7 +95,7 @@ Manticore orchestrates tools; it does not replace them. The defaults are local a
 | parakeet-mlx / onnx-asr | Word-level cutting transcripts with verbatim fillers (the "um"s are exactly what gets cut); parakeet-mlx on Apple Silicon, onnx-asr running the same parakeet-tdt-0.6b-v3 weights on Windows, Linux, and Intel Mac | Free, runs locally, no API key |
 | Kokoro-82M (kokoro-onnx) | TTS narration and two-host dialogue for the mc-audio lane (stock voices, no cloning) | Free, local, faster than realtime on CPU |
 | MusicGen-small + AudioLDM2 | Instrumental music beds and SFX, farmed locally by mc-audio | Free, local, ungated models |
-| HyperFrames and Remotion | Motion graphics engines for overlay beats, stingers, and karaoke captions | Free (Remotion is free for companies up to 3 people) |
+| HyperFrames | Motion graphics engine for overlay beats, stingers, and karaoke captions | Free, local, Apache 2.0, no commercial-use threshold |
 | OGraf + SPX-GC / OBS | Broadcast graphics that stay editable in DaVinci Resolve 21+ and click-to-trigger live in OBS | Free |
 | yt-dlp | Pulls your back-catalog transcripts to build your voice bible | Free |
 | Grok CLI (xAI), opt-in | Imagine stills and image-to-video b-roll clips with native audio, plus X/Twitter research and posting, from the terminal | Covered by a SuperGrok / X Premium+ subscription; a metered xAI API lane exists only as an explicit opt-in |
@@ -129,7 +135,7 @@ Seven ship by default: talking-head, screen-tutorial (real UI only, generated b-
 | mc-script | Weave the script from your words; lint; craft QA |
 | mc-cut | Word-level transcript, cut plan with taste calls (gate 2), edl.json, preview render every iteration, timeline export, the offered final render |
 | mc-beats | The graphics beat table anchored to spoken words, under creativity mandates and your density tier, with a CTA placement pass (gate 3) |
-| mc-graphics | Execute beats in HyperFrames / Remotion / HTML / design-prompting; frame-verified alpha overlays |
+| mc-graphics | Execute beats in HyperFrames / HTML / design-prompting; frame-verified alpha overlays |
 | mc-ograf | Editable broadcast graphics (DaVinci Resolve 21+ and OBS/SPX-GC) |
 | mc-assets | Farm b-roll stills/clips via your registered CLI tools (metered APIs opt-in), under generative-editing safety rules |
 | mc-audio | Farm sound, local-first: TTS narration and two-host dialogue (Kokoro-82M), instrumental beds (MusicGen-small), SFX (AudioLDM2); paid lanes opt-in |
@@ -143,10 +149,10 @@ Taste lives in files (your voice bible, Production Bible, format profiles, brand
 
 ## Status
 
-1.0.0 is the first release shaped by real production use. Honest state as of 2026-07-07:
+2.0.0 is shaped by real production use. Honest state as of 2026-07-23:
 
-- Proven in production: the full cut lane (parakeet-mlx word-level transcription validated on real footage, cut candidate detection, edl.json, FCPXML export, preview render with boundary-frame verification), Manny as the front door, setup and dependency checking, config resolution, project scaffolding, the OBS stream pack, and the retro loop.
-- New in 1.0, implemented and unit-tested, with the least real-project mileage: the render lane (composited preview and the offered final render), the expanded setup interview (render consent, video style, creator-emulation takeaways, headshots, guided voice bible), the Production Bible, creativity mandates and the CTA system, footage-first ingest and the livestream-vod format, series support, graphics render verification, the graphics toolkit (HTML render, snug framing, design-prompting lane), CLI-registry asset farming, and the mc-audio local sound lanes (validated end to end on Apple Silicon 2026-07-07).
+- Proven in production: the full cut lane (parakeet-mlx word-level transcription validated on real footage, cut candidate detection, edl.json, FCPXML export, preview render with boundary-frame verification), Manny as the front door, setup and dependency checking, config resolution, project scaffolding, the render lane (composited preview and the offered final render), the expanded setup interview, the Production Bible, creativity mandates and the CTA system, footage-first ingest, series support, the graphics toolkit, CLI-registry asset farming, the OBS stream pack, the mc-audio local sound lanes (validated end to end on Apple Silicon), and the retro loop.
+- New in 2.0, implemented and unit-tested, with the least real-project mileage: HyperFrames as the sole motion-graphics engine with its Agent Skills installed at setup, the incremental content-addressed final render, default -14 LUFS loudness normalization, and the cross-platform stack (onnx-asr transcription and the per-OS hardware-encoder ladders on Windows, Linux, and Intel Mac) — code-complete and covered by tests, but treat the first run on non-Apple-Silicon hardware as a shakedown.
 - The writing lane (braindump, outline, script) is the core promise and is wired end to end with live blacklist linting; it has had the least real-video exercise of the core stages, so treat your first run through it as a shakedown and feed mc-retro afterward.
 - Planned: Premiere (xmeml) and CMX3600 EDL export lanes, per-episode stream packs with the Ecamm target (the named 1.0.x fast-follow), multitrack recording support, the remaining audio lanes (full songs with vocals, plus the paid opt-in rungs of the audio ladder), and a research/show-prep skill. See [TODO.md](TODO.md) for the full roadmap.
 

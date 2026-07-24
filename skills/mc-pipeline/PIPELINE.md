@@ -20,15 +20,15 @@ Format profiles select a subset of these stages (see the `stages:` frontmatter o
 | 3 | outline | mc-outline | gate 1: outline | `outline.md` (hooks + outline + packaging promise) |
 | 4 | script | mc-script | | `script.md` (lint passed, craft QA passed) |
 | 5 | record | the creator | | `raw/*` recordings, constant frame rate |
-| 6 | cut | mc-cut | gate 2: cutplan | `transcript/words.json` (suffixed `<source-id>.words.json` when a project has multiple sources), `cut/candidates.json`, `cut/cutplan.md`, `cut/edl.json`, `cut/rough.fcpxml` (per `[editor] timeline-format`; `none` skips), `renders/preview.mp4` (fast low-res preview, re-rendered each iteration; once stage 8 has rendered overlays, the router sends the project back through mc-cut to re-render it with graphics composited) |
+| 6 | cut | mc-cut | gate 2: cutplan | `transcript/words.json` (suffixed `<source-id>.words.json` when a project has multiple sources), `cut/candidates.json`, `cut/cutplan.md`, `cut/edl.json`, `cut/rough.fcpxml` (per `[editor] timeline-format`; `none` skips), `renders/preview.mp4` (fast low-res preview, re-rendered each iteration; once stage 9 has rendered overlays, the router sends the project back through mc-cut to re-render it with graphics composited) |
 | 7 | beats | mc-beats | gate 3: beats | `beats/beats.md` (the beat table), `beats/STORYBOARD.md` |
-| 8 | graphics | mc-graphics | | `graphics/` alpha MOVs + `graphics/HANDOFF.md`; on completion the router routes through mc-cut to re-render `renders/preview.mp4` with the overlays composited |
-| 9 | assets | mc-assets | | `assets/` + `assets/manifest.json` |
+| 8 | assets | mc-assets | | `assets/` + `assets/manifest.json` |
+| 9 | graphics | mc-graphics | | `graphics/` alpha MOVs + `graphics/HANDOFF.md`; on completion the router routes through mc-cut to re-render `renders/preview.mp4` with the overlays composited |
 | 10 | package | mc-package | | `packaging/titles.md`, `packaging/thumbs/`, `packaging/description.md`, `packaging/chapters.md`, `packaging/captions/` (final.srt, final.vtt, transcript.md, when the cut exists) |
-| 11 | final | the creator, with an offered pipeline render | gate 4: final | `renders/final.mp4` (the offered final-quality render: same EDL, graphics composited from the beat table, delivery resolution and codec per `[render]`, loudness-normalized to the `[render]` loudness-target unless loudnorm is off), or the creator's own editor render into `renders/` |
+| 11 | final | the creator, with an offered pipeline render | gate 4: final | `renders/final.mp4` (the offered final-quality render: same EDL, graphics composited from the beat table, delivery resolution per `[video]` delivery-resolution and codec per `[render]`, loudness-normalized to the `[render]` loudness-target unless loudnorm is off), or the creator's own editor render into `renders/` |
 | 12 | retro | mc-retro | | edits to `{formats-path}/<format>.md` learnings + offending skill files |
 
-Stages 8 and 9 may run in parallel once gate 3 is approved. Stage 10 may start any time after gate 1 (the packaging promise exists from the outline).
+Stage 8 (assets) runs before stage 9 (graphics) so the farmed stills and clips exist before graphics composes with them; both unlock at gate 3. Stage 10 may start any time after gate 1 (the packaging promise exists from the outline).
 
 ## project.json contract
 
@@ -41,7 +41,7 @@ Stages 8 and 9 may run in parallel once gate 3 is approved. Stage 10 may start a
   "parent": null,
   "stage": "braindump",
   "series": null,
-  "stages": ["new", "braindump", "outline", "script", "record", "cut", "beats", "graphics", "assets", "package", "final", "retro"],
+  "stages": ["new", "braindump", "outline", "script", "record", "cut", "beats", "assets", "graphics", "package", "final", "retro"],
   "stages_done": ["new"],
   "approvals": {
     "outline": null,
@@ -57,7 +57,7 @@ Stages 8 and 9 may run in parallel once gate 3 is approved. Stage 10 may start a
 Field rules:
 
 - `stage` is the stage currently in progress or next to run. When the last stage in `stages` completes (retro), it is set to `done`, the one terminal value not drawn from `stages`.
-- `stages` is copied from the format profile at creation; never assume the master list. Footage-first projects (an existing recording, a livestream VOD) use the ingest-first variant written by mc-new's ingest mode: `["new", "cut", "beats", "graphics", "assets", "package", "final", "retro"]`. It skips the ideation stages entirely; the source file is registered in `sources` at creation.
+- `stages` is copied from the format profile at creation; never assume the master list. Footage-first projects (an existing recording, a livestream VOD) use the ingest-first variant written by mc-new's ingest mode: `["new", "cut", "beats", "assets", "graphics", "package", "final", "retro"]`. It skips the ideation stages entirely; the source file is registered in `sources` at creation.
 - `series` (optional, default `null`) names the series this project belongs to, written by mc-new's `--series` mode. A series is a folder under `{projects-path}` holding a `common/` folder for evergreen shared assets and one subfolder per episode project. Stages that read brand templates (mc-package) check `series` to apply per-series packaging templates.
 - `approvals` values are `null` (not reached), `"pending"` (artifact presented, waiting on the creator), or an ISO date string (approved that day). Only the creator's explicit say-so in conversation moves pending to a date.
 - `artifacts` maps artifact names to paths as they are produced, e.g. `"edl": "cut/edl.json"`.
@@ -88,11 +88,12 @@ If the config exists but a key this stage needs is missing or empty, ask for jus
 
 ## Engine policy
 
-- HyperFrames: default for per-video overlay beats. Registry blocks before authoring (`npx hyperframes add`). Export overlay-only ProRes 4444 MOV with alpha.
-- Remotion: stingers and transitions (dual render: VP9 alpha WebM for OBS + ProRes 4444 for the editor timeline lane), React-stateful graphics, shorts karaoke captions. Free for companies of up to 3 people; larger teams need a Remotion license.
+- HyperFrames: the graphics engine. Per-video overlay beats, stingers and transitions (dual render: VP9 alpha WebM for OBS + ProRes 4444 for the editor timeline lane), and shorts karaoke captions. Registry blocks before authoring (`npx hyperframes add`). Export overlay-only ProRes 4444 MOV with alpha. Apache 2.0, local, no commercial-use threshold.
 - OGraf (the mc-ograf skill): ONLY when the target supports it. Editor lane requires `[editor] ograf-editable = true` (DaVinci Resolve 21+); the live lane (OBS/SPX-GC via mc-stream-pack) is editor-independent. Everyone else gets baked alpha MOVs, which work in every editor.
 - Everything is themed through `{brand-path}/tokens.json`. Component sourcing rule: registries and open libraries first, author from scratch only when nothing fits.
-- Engine workspaces (the pinned HyperFrames project, the Remotion project) live at `{engines-path}`; mc-setup or the first graphics run initializes them.
+- Engine workspaces (the pinned HyperFrames project) live at `{engines-path}`; mc-setup or the first graphics run initializes them.
+- Remotion was a second engine through 0.x and was removed on 2026-07-22: its license is free only up to 3 people, and its React authoring model bought nothing in a frame-deterministic renderer. Rationale in `mc-graphics/engines/hyperframes.md`.
+- Compatibility alias (unconditional, any vintage): `remotion` is a permanent alias for `hyperframes` wherever an engine is named — a beat-table `engine` value OR a format profile's `engine_overlays`/`engine_stingers` frontmatter. A studio configured before 2.0.0 keeps its own copied profiles that may still say `remotion`; every skill reads that as `hyperframes` and no creator file is rewritten. There is no Remotion engine doc or workspace to route to.
 
 ## The beat table (engine-neutral graphics contract)
 
@@ -104,9 +105,9 @@ One row per graphic beat, produced by mc-beats, consumed by mc-graphics and mc-a
 Column rules:
 
 - `type` is a beat type from the format profile's `beat-types` frontmatter list (e.g. `lower-third`, `diagram`, `stat-card`, `cta`); the profile is the single type vocabulary for its format. The reserved placeholder `overlay` is legal only when reading legacy tables (tolerance rule below) and is never written.
-- `engine` names the engine that renders the beat, per the Engine policy below (e.g. `hyperframes`, `remotion`, `ograf`, `html`).
+- `engine` names the engine that renders the beat, per the Engine policy below (e.g. `hyperframes`, `ograf`, `html`).
 - `asset` is `null` or a farmed-asset id from `assets/manifest.json`; mc-assets farms the listed assets, mc-graphics composes with them.
-- Tolerance rule: consumers MUST accept rows missing `type`, `engine`, or `asset` (beat tables written by 0.x projects). Treat a missing `type` as the reserved placeholder `overlay` (informational only; rendering keys off `engine` and `composition`), a missing `engine` as the Engine policy default, and a missing `asset` as `null`. A stage that rewrites the table (mc-beats) replaces every `overlay` placeholder with a type from the profile's `beat-types`. An in-flight 0.x project never breaks on the extended contract.
+- Tolerance rule: consumers MUST accept rows missing `type`, `engine`, or `asset` (beat tables written by 0.x projects). Treat a missing `type` as the reserved placeholder `overlay` (informational only; rendering keys off `engine` and `composition`), a missing `engine` as the Engine policy default, an `engine` of `remotion` (from any vintage of table, per the Engine policy's compatibility alias) as `hyperframes`, and a missing `asset` as `null`. A stage that rewrites the table (mc-beats) replaces every `overlay` placeholder with a type from the profile's `beat-types`. An in-flight 0.x project never breaks on the extended contract.
 
 Anchors are measured against the EDITED timeline defined by `cut/edl.json`, not the raw take.
 

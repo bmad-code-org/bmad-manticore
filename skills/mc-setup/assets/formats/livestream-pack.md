@@ -2,7 +2,7 @@
 format: livestream-pack
 stages: [new, stream-pack, final, retro]
 engine_overlays: ograf
-engine_stingers: remotion
+engine_stingers: hyperframes
 generated_broll: banned
 beat-types: [starting-soon-scene, brb-scene, ending-scene, full-overlay, lower-third, topic-card, stinger]
 density:
@@ -25,7 +25,7 @@ Not a video. One run of mc-stream-pack producing a complete OBS asset pack from 
 
 - Static scenes as self-contained local HTML (starting-soon with countdown, BRB, ending, full overlay). OBS browser sources render local HTML transparent by default; no server.
 - Scenes are reactive via the `window.obsstudio` JS API (countdown resets on scene activation, lower thirds re-trigger entrance on visibility) with a plain-browser fallback.
-- Stinger transition: one Remotion comp rendered twice (VP9 yuva420p WebM for OBS, ProRes 4444 MOV for the editor lane), 1 to 2 seconds. Baked alpha scene and lower-third deliverables list WebM VP9 alpha (libvpx-vp9 yuva420p) for OBS on any platform alongside the ProRes 4444 MOV; render_verify.py can transcode and verify the WebM from the ProRes master in one step.
+- Stinger transition: one HyperFrames comp rendered twice (VP9 yuva420p WebM for OBS, ProRes 4444 MOV for the editor lane), 1 to 2 seconds. Baked alpha scene and lower-third deliverables list WebM VP9 alpha (libvpx-vp9 yuva420p) for OBS on any platform alongside the ProRes 4444 MOV; render_verify.py can transcode and verify the WebM from the ProRes master in one step.
 - vMix note: vMix rejects MP4 stingers and prefers PNG sequences; when the live tool is vMix, deliver a PNG sequence or the ProRes 4444 MOV instead of WebM. Wirecast takes the ProRes 4444 MOV directly.
 - Lower thirds and topic cards as OGraf (via the mc-ograf skill), standalone-capable and SPX-GC-compatible for click-to-trigger later.
 

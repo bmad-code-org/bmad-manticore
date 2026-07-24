@@ -2,7 +2,7 @@
 format: course-lesson
 stages: [new, braindump, outline, script, record, cut, beats, graphics, package, final, retro]
 engine_overlays: hyperframes
-engine_stingers: remotion
+engine_stingers: hyperframes
 generated_broll: banned
 beat-types: [lower-third, title-card, step-counter, definition-card, checkpoint-slide, list-build, diagram, screenshot-callout, recap-card, cta]
 density:
@@ -27,7 +27,7 @@ Talking-head profile adapted for course/lesson content. The first five lessons a
 
 ## Engine defaults
 
-- Same as talking-head: HyperFrames overlays, Remotion stinger.
+- Same as talking-head: HyperFrames overlays, HyperFrames stinger.
 
 ## Templates
 

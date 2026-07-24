@@ -277,7 +277,7 @@
         </div>
         <div class="rcard">
           <div class="rhead"><h3>Rendering</h3><span class="chip work">working</span></div>
-          <p><b>ffmpeg</b>, segment-parallel and disk-preflighted, with videotoolbox hardware encode on macOS; the final render is loudness-normalized to -14 LUFS. The Windows (nvenc, qsv, amf) and Linux (nvenc, vaapi) encoder ladders with libx264 fallback are code-complete, pending real-hardware validation.</p>
+          <p><b>ffmpeg</b>, incremental and disk-preflighted: the timeline is partitioned into content-addressed segments, so a re-render re-encodes only the segments whose inputs actually changed and reuses the rest — one tweaked graphic on a long video is a seconds-long re-render. Video segments are cached; the audio is rebuilt whole every pass so the timeline stays exact. videotoolbox hardware encode on macOS; the final render is loudness-normalized to -14 LUFS. The Windows (nvenc, qsv, amf) and Linux (nvenc, vaapi) encoder ladders with libx264 fallback are code-complete, pending real-hardware validation.</p>
         </div>
         <div class="rcard">
           <div class="rhead"><h3>Graphics render</h3><span class="chip work">working</span></div>
@@ -285,7 +285,7 @@
         </div>
         <div class="rcard">
           <div class="rhead"><h3>Motion engines</h3><span class="chip work">working</span></div>
-          <p><b>HyperFrames</b> and <b>Remotion</b> for overlay beats and stingers, <b>OGraf</b> for editable broadcast graphics. Themed through tokens.json.</p>
+          <p><b>HyperFrames</b> for overlay beats, stingers, and karaoke captions, <b>OGraf</b> for editable broadcast graphics. Themed through tokens.json.</p>
         </div>
         <div class="rcard">
           <div class="rhead"><h3>Look development</h3><span class="chip work">working</span></div>
@@ -532,14 +532,13 @@
           <tbody>
             <tr><td><b>b1</b></td><td>"latency"</td><td class="t">00:12.40</td><td>stat-card</td><td>hyperframes</td><td>null</td></tr>
             <tr><td><b>b2</b></td><td>"pipeline"</td><td class="t">00:31.08</td><td>diagram</td><td>html</td><td>null</td></tr>
-            <tr><td><b>b3</b></td><td>"subscribe"</td><td class="t">01:47.902</td><td>cta</td><td>remotion</td><td>null</td></tr>
+            <tr><td><b>b3</b></td><td>"subscribe"</td><td class="t">01:47.902</td><td>cta</td><td>hyperframes</td><td>null</td></tr>
             <tr><td><b>b4</b></td><td>"the result"</td><td class="t">02:20.15</td><td>lower-third</td><td>ograf</td><td>shot-07</td></tr>
           </tbody>
         </table>
       </div>
       <div class="enginerow">
-        <div class="eng"><h4>HyperFrames</h4><p>Default per-video overlay beats. Registry checked before authoring; exports ProRes 4444 alpha.</p></div>
-        <div class="eng"><h4>Remotion</h4><p>Stingers, transitions, React-stateful graphics, shorts karaoke captions. Dual render for OBS and the editor.</p></div>
+        <div class="eng"><h4>HyperFrames</h4><p>Overlay beats, stingers, and shorts karaoke captions. Registry checked before authoring; exports ProRes 4444 alpha, plus a VP9 alpha WebM dual render for OBS.</p></div>
         <div class="eng"><h4>OGraf</h4><p>Editable broadcast graphics, only where the target supports it (Resolve 21+, or OBS live). Everyone else gets baked alpha.</p></div>
         <div class="eng"><h4>HTML lane</h4><p>Author from scratch, rendered to exact pixels by Playwright, then frame-verified over a checkerboard for alpha.</p></div>
       </div>
