@@ -6,6 +6,7 @@
 - Scheduled-livestream packaging: mc-package live-event mode and the two-asset thumbnail rule.
 - farm_asset.py metered API lane (xAI Imagine, Veo 3.1 as escalation), opt-in only, never a default.
 - Script the beat-table quota check: read the variety quota, static-card cap and beats-per-minute floor from the Production Bible and exit non-zero on a plan that misses them.
+- HyperFrames skills install: `npx skills add heygen-com/hyperframes` leaves Git LFS pointer text in place of binary assets (changelog-video's bgm.mp3 and bg-pattern.mp4) and drops fonts and SFX from embedded-captions, hyperframes-creative, media-use, music-to-video and talking-head-recut. `npx skills check` reinstalls and breaks them again. Find an install path that keeps the binaries, or a setup check that fails on a pointer file.
 - resolve_import.py: push the exported timeline into a running DaVinci Resolve (Studio for external scripting, Fusion Scripts menu for free edition).
 
 ## Multitrack and multicam

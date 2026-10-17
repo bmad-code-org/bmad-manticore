@@ -48,6 +48,10 @@ class TestRenderVerify(unittest.TestCase):
         make_fixture(cls.vp9, color="lime@0.5", dur=1,
                      codec_args=["-c:v", "libvpx-vp9", "-pix_fmt", "yuva420p",
                                  "-b:v", "100k", "-deadline", "realtime", "-cpu-used", "8"])
+        cls.solid_alpha = root / "solid-alpha.mov"
+        make_fixture(cls.solid_alpha, color="red",
+                     codec_args=["-c:v", "prores_ks", "-profile:v", "4444",
+                                 "-pix_fmt", "yuva444p10le"])
         cls.opaque = root / "opaque.mp4"
         make_fixture(cls.opaque, color="blue", rate=25, pixel="yuv420p",
                      codec_args=["-c:v", "libx264", "-pix_fmt", "yuv420p"])
@@ -121,6 +125,24 @@ class TestRenderVerify(unittest.TestCase):
         self.assertTrue(out["probe"]["alpha"])
         self.assertTrue(out["checks"]["pixfmt"]["pass"])
 
+    def test_alpha_render_with_no_transparency_fails(self):
+        # An overlay whose root paints a background renders fully opaque.
+        r, out = run([str(self.solid_alpha), "--pixfmt", "prores4444",
+                      "--out-dir", str(self._out_dir())])
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(out["checks"]["transparent"]["pass"])
+
+    def test_allow_opaque_skips_transparency_check(self):
+        r, out = run([str(self.solid_alpha), "--pixfmt", "prores4444", "--allow-opaque",
+                      "--out-dir", str(self._out_dir())])
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertNotIn("transparent", out["checks"])
+
+    def test_vp9_alpha_plane_is_read(self):
+        r, out = run([str(self.vp9), "--out-dir", str(self._out_dir())])
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertTrue(out["checks"]["transparent"]["pass"])
+
     def test_opaque_file_skips_checkerboard(self):
         r, out = run([str(self.opaque), "--out-dir", str(self._out_dir())])
         self.assertEqual(r.returncode, 0)
@@ -139,7 +161,7 @@ class TestRenderVerify(unittest.TestCase):
         r, out = run([str(self.prores), "--meta", str(meta),
                       "--out-dir", str(self._out_dir())])
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertEqual(set(out["checks"]), {"pixfmt", "res", "fps", "dur"})
+        self.assertEqual(set(out["checks"]), {"pixfmt", "res", "fps", "dur", "transparent"})
         self.assertTrue(out["ok"])
 
     def test_explicit_flag_overrides_meta(self):

@@ -8,7 +8,8 @@ Usage:
     uv run {skill-root}/scripts/render_verify.py <rendered-file>
         [--meta PATH] [--pixfmt prores4444|yuva420p|<raw pix_fmt>]
         [--expect-dur SECONDS] [--expect-fps FPS] [--expect-res WxH]
-        [--dur-tol SECONDS] [--frames 5] [--checker] [--out-dir PATH]
+        [--dur-tol SECONDS] [--frames 5] [--checker] [--allow-opaque]
+        [--out-dir PATH]
 
 Contract:
     input   a rendered MOV/WebM/mp4; every expectation arrives explicitly from
@@ -26,6 +27,11 @@ Contract:
             other value is compared raw), resolution vs WxH, fps vs expected
             (tolerance 0.05), duration vs expected (tolerance --dur-tol,
             default 0.2s); checks are skipped for expectations not provided
+            alpha: when the file carries alpha, decode the alpha plane at the
+            first frame, the last frame and every extraction timestamp, and
+            fail when every sampled frame is fully opaque (an overlay whose
+            root paints a background); --allow-opaque skips this for a comp
+            meant to cover the frame
             ffmpeg: extract N frames evenly spaced (composited over a
             checkerboard when the file carries alpha, or when --checker is
             passed) into a _verify/ folder next to the input (or --out-dir)
@@ -117,6 +123,32 @@ def check_pixfmt(expected: str, stream: dict) -> bool:
     return pix_fmt == expected
 
 
+def decoder_args(stream: dict) -> list[str]:
+    # ffmpeg's native VP9/VP8 decoders drop the alpha side channel; libvpx keeps it.
+    codec = stream.get("codec_name", "")
+    if codec == "vp9":
+        return ["-c:v", "libvpx-vp9"]
+    if codec == "vp8":
+        return ["-c:v", "libvpx"]
+    return []
+
+
+def min_alpha(path: Path, t: float, stream: dict, width: int, height: int) -> int | None:
+    cmd = ["ffmpeg", "-v", "error", "-ss", f"{t:.6f}", *decoder_args(stream), "-i", str(path),
+           "-frames:v", "1", "-vf", "alphaextract,format=gray", "-f", "rawvideo", "-"]
+    r = subprocess.run(cmd, capture_output=True)
+    if r.returncode != 0 or len(r.stdout) < width * height:
+        return None
+    return min(r.stdout[:width * height])
+
+
+def sample_times(count: int, duration: float | None, fps: float | None) -> list[float]:
+    if duration is None or duration <= 0:
+        return [0.0]
+    last = max(0.0, duration - (1.0 / fps if fps else 0.05))
+    return [0.0, last] + [duration * (i + 0.5) / count for i in range(count)]
+
+
 def extract_frames(path: Path, out_dir: Path, count: int, duration: float | None,
                    width: int, height: int, checker: bool) -> list[str]:
     if shutil.which("ffmpeg") is None:
@@ -176,6 +208,8 @@ def main() -> None:
     p.add_argument("--frames", type=int, default=5, help="frames to extract, evenly spaced (default 5)")
     p.add_argument("--checker", action="store_true",
                    help="force checkerboard compositing (automatic for alpha files)")
+    p.add_argument("--allow-opaque", action="store_true",
+                   help="skip the transparency check for a comp meant to cover the whole frame")
     p.add_argument("--out-dir", help="frame output folder (default: _verify/ next to the input)")
     args = p.parse_args()
 
@@ -239,6 +273,18 @@ def main() -> None:
         edur = float(expect["dur"])
         checks["dur"] = {"expected": edur, "actual": duration, "tolerance": args.dur_tol,
                          "pass": duration is not None and abs(duration - edur) <= args.dur_tol}
+
+    if alpha and not args.allow_opaque:
+        if shutil.which("ffmpeg") is None:
+            die("ffmpeg not found on PATH")
+        samples = {f"{t:.2f}": min_alpha(path, t, stream, width, height)
+                   for t in sample_times(max(1, args.frames), duration, fps)}
+        decoded = [v for v in samples.values() if v is not None]
+        checks["transparent"] = {
+            "expected": "some sampled frame has alpha below 255",
+            "actual": samples,
+            "pass": bool(decoded) and min(decoded) < 255,
+        }
 
     out_dir = Path(args.out_dir) if args.out_dir else path.parent / "_verify"
     use_checker = alpha or args.checker
