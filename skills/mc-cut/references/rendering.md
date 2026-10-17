@@ -115,9 +115,7 @@ Always exported, per `[editor] timeline-format`.
 | `xmeml`, `edl` | Not yet implemented | Premiere users work from cutplan.md, edl.json and the rendered preview. See TODO.md |
 | `none` | Skipped | Descript and manual workflows. The deliverables are cutplan.md, edl.json and renders/preview.mp4 as the cut map |
 
-`{skill-root}/scripts/resolve_import.py` is a stub. Do not offer it. It is named here only
-because the file exists and reads as usable; when its STATUS line says
-implemented, offer it only where `[mcp] davinci-resolve` is true.
+When `[editor] name` is `resolve`, `{skill-root}/scripts/resolve_import.py` imports `cut/rough.fcpxml` into the creator's running Resolve Studio as a new timeline, adds review markers, and checks every clip against the fcpxml frame by frame. SKILL.md carries the command and exit handling. It drives Resolve's scripting API directly and needs no MCP server.
 
 ## Derived artifacts drift silently
 

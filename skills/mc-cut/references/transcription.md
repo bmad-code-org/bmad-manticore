@@ -73,3 +73,5 @@ uv run {skill-root}/scripts/verify_transcript.py transcript/words.json \
 Repeatable. The acceptance must fully cover the flagged region, and both the
 region and the reason land in `transcript-check.json`. That is the only way past
 this gate, and it is a recorded decision rather than a silent one.
+
+The gate also fails a transcript with no fillers ("um", "uh") over two minutes of speech: the transcriber normalized them away, and the cut needs them to find stumbles and restarts. Re-transcribe with the reference lane. Only when the creator confirms the take genuinely has none, such as a tightly scripted read, add `--accept-no-fillers "<why>"`; the reason lands in `transcript-check.json`.
