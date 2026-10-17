@@ -49,7 +49,7 @@ If this machine is not Apple Silicon, say so plainly rather than letting the cre
 HyperFrames is the graphics engine, and its Agent Skills carry the agent's current, self-refreshing knowledge of what it can do. Installing them at setup rather than at first graphics run is deliberate: the capability surface is then known from the beats stage onward, where it changes what gets planned.
 
 ```
-npx skills add heygen-com/hyperframes --all --full-depth
+npx skills add heygen-com/hyperframes --all
 ```
 
 Idempotent, so a re-run refreshes rather than duplicates. `npx hyperframes skills update` takes only the maintained core set for a lighter footprint. This runs on the local CLI with no account and no credits, and it is not the engine workspace, which is a multi-GB npm install that still builds lazily at first graphics run. If node or npx is missing, say HyperFrames graphics need them and defer rather than blocking setup.

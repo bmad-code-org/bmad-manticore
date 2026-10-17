@@ -95,7 +95,7 @@ Gate 4 has two equally supported paths: the offered `renders/final.mp4`, or the 
 
 ## Engine policy
 
-- HyperFrames: the graphics engine. Per-video overlay beats, stingers and transitions (dual render: VP9 alpha WebM for OBS + ProRes 4444 for the editor timeline lane), and shorts karaoke captions. Registry blocks before authoring (`npx hyperframes add`). Export overlay-only ProRes 4444 MOV with alpha. Apache 2.0, local, no commercial-use threshold.
+- HyperFrames: the graphics engine. Per-video overlay beats, stingers and transitions (dual render: VP9 alpha WebM for OBS + ProRes 4444 for the editor timeline lane), and shorts karaoke captions. Registry blocks before authoring (`npx hyperframes catalog --query`, then `npx hyperframes add`). Export overlay-only ProRes 4444 MOV with alpha. Apache 2.0, local, no commercial-use threshold.
 - Baked alpha MOVs are the deliverable everywhere, unconditionally. There is no editable-graphics lane and no editor-dependent branch: what one editor gets, every editor gets.
 - Everything is themed through `{brand-path}/tokens.json`. Component sourcing rule: registries and open libraries first, author from scratch only when nothing fits.
 - Engine workspaces (the pinned HyperFrames project) live at `{engines-path}`; mc-setup or the first graphics run initializes them.

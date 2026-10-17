@@ -24,15 +24,15 @@ The approved beat table comes in; rendered overlays go out. The outcome is a `gr
 
 ## Engine workspaces
 
-Engine workspaces live at `{engines-path}/<engine>/`; initialize on first use per the engine README, installing the latest published version at that moment and recording what it resolved. For HyperFrames, refresh its Agent Skills now (`npx hyperframes init`); mc-setup installs them, but install them here if setup was skipped or predates them (`npx skills add heygen-com/hyperframes --all --full-depth`, or `npx hyperframes skills update` for the core set).
+Engine workspaces live at `{engines-path}/<engine>/`; initialize on first use per the engine README, installing the latest published version at that moment and recording what it resolved. For HyperFrames, refresh its Agent Skills now (`npx hyperframes init`); mc-setup installs them, but install them here if setup was skipped or predates them (`npx skills add heygen-com/hyperframes --all`, or `npx hyperframes skills update` for the core set).
 
 ## Source before authoring
 
-For each beat, reach first for a fitting HyperFrames block or installed skill across the whole catalog and its footage-facing effects (`npx hyperframes add`, existing brand-themed blocks in the engine workspace), per `{skill-root}/engines/hyperframes.md`. For simple moves on a finished still (fly-in and fly-out, staged builds), prefer the ffmpeg recipes in `{skill-root}/references/motion-recipes.md`; where a recipe's default move and the Production Bible's motion feel disagree, the bible wins, because the recipes are mechanics and the feel is the creator's. Author from scratch via the html lane (`{skill-root}/engines/html.md`) or the design-prompting loop (`{skill-root}/engines/design-prompting.md`) only when nothing fits. Everything themes through tokens.json; no hardcoded colors or fonts.
+For each beat, reach first for a fitting HyperFrames block or installed skill across the whole catalog and its footage-facing effects (`npx hyperframes catalog --query "<the beat in plain words>"`, then `npx hyperframes add`; existing brand-themed blocks in the engine workspace), per `{skill-root}/engines/hyperframes.md`. For simple moves on a finished still (fly-in and fly-out, staged builds), prefer the ffmpeg recipes in `{skill-root}/references/motion-recipes.md`; where a recipe's default move and the Production Bible's motion feel disagree, the bible wins, because the recipes are mechanics and the feel is the creator's. Author from scratch via the html lane (`{skill-root}/engines/html.md`) or the design-prompting loop (`{skill-root}/engines/design-prompting.md`) only when nothing fits. Everything themes through tokens.json; no hardcoded colors or fonts.
 
 ## Build and verify
 
-Build per engine in the project's `graphics/` folder, running the loop: edit, lint, preview, draft render (CRF 28), single-frame verify, final render. The shipped toolkit does the mechanical parts: `{skill-root}/scripts/html_to_png.py` (exact-size HTML render, separate `--guides` pass, alpha verify) and `{skill-root}/scripts/snug_frame.py` (native-aspect photo framing).
+Build per engine in the project's `graphics/` folder, running the loop: edit, `npx hyperframes lint`, `npx hyperframes check` (layout, contrast, and text behind transparent video; scope it with `--range start,end` while iterating), `npx hyperframes snapshot` for key frames, preview, draft render (`--quality draft`), single-frame verify, final render. The shipped toolkit does the mechanical parts: `{skill-root}/scripts/html_to_png.py` (exact-size HTML render, separate `--guides` pass, alpha verify) and `{skill-root}/scripts/snug_frame.py` (native-aspect photo framing).
 
 Verify every final render with `uv run {skill-root}/scripts/render_verify.py`, passing expectations explicitly: `--pixfmt` per the delivery target, `--expect-dur` from the beat's dur, `--expect-fps` and `--expect-res` from the format profile, or `--meta` pointing at the comp's meta.json render contract carrying the same keys. Then look at the extracted frames over checkerboard; a render without checked frames is not done.
 
@@ -53,7 +53,7 @@ Then update project.json artifacts, advance stage per the profile (usually `asse
 ## Rules
 
 - The beat table is law. A composition that wants different timing goes back through the creator, not silently changed.
-- Overlay exports are ProRes 4444 with alpha; anything else is a bug.
+- Overlay exports are ProRes 4444 with alpha and a transparent root; anything else is a bug. render_verify.py fails an alpha render whose sampled frames are all fully opaque.
 - Relevance gate: a viewer pausing at the anchor frame must see WHY this graphic is on screen. One that needs the storyboard to explain it fails.
 - Transcript fact-check: any claim-bearing graphic (numbers, dates, quotes, names, titles, announcements) is checked against the transcript verbatim before render. Never invent an announcement, statistic, or quote the speaker did not say.
 - Never guess external references. Video IDs, channel names, people's names, and spellings come from a source, from the project's people-glossary when one exists, or from asking the creator.

@@ -5,7 +5,7 @@ description: Farm narration, music beds, and SFX locally. Use when another skill
 
 # mc-audio
 
-mc-assets farms pictures; this skill farms sound. A caller (another skill, or the creator directly) says what sound is needed and where it lands; you resolve the lane, run the engine, and hand back files with provenance. It is a service skill: it owns no stage, stops at no gate, and writes no project state. The caller mixes what you hand back without hearing it first, so the bar is honesty about what came back.
+mc-assets farms pictures; this skill farms sound. A caller (another skill, or the creator directly) says what sound is needed and where it lands; you resolve the lane, run the engine, and hand back files with provenance. It is a service skill: it owns no stage, stops at no gate, and writes no project state. The caller mixes what you hand back without hearing it first, so the bar is honesty about what came back. Mixing is not this skill's job: inside a HyperFrames composition the `hyperframes-audio` skill mixes, and elsewhere the caller does.
 
 Read `{skill-root}/references/audio-lanes.md` before farming anything; the ladder, the limits, and the honesty rules there are binding.
 

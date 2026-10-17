@@ -6,6 +6,15 @@ All notable changes to BMad Manticore are documented here. Dates are ISO (YYYY-M
 
 Reviewing a cut no longer means waiting for a render. Everything here came out of one real 20-minute 4K project whose gate-2 preview took 22 minutes to encode — twice, because the first one failed validation at the finish line.
 
+### Current HyperFrames
+
+- `render_verify.py` now fails an alpha render whose sampled frames are all fully opaque. HyperFrames alpha renders now keep any background on the composition root, so an overlay with a root background came out as a solid full-frame clip. Pass `--allow-opaque` for a comp meant to cover the frame. WebM VP9 alpha is decoded with libvpx so its alpha plane is read.
+- mc-graphics and mc-beats search the HyperFrames registry (`npx hyperframes catalog --query`) before hand-building a beat, and the build loop adds `check` and `snapshot`.
+- Manticore's gates replace HyperFrames' own "render now, or what changes?" step before a final render.
+- The engine doc names the new `hyperframes-audio` skill for mixing inside a composition and `hyperframes-studio` for timeline layout, and opens Studio with `npx hyperframes preview`.
+- mc-retro's wrap lane lists HyperFrames scratch with `npx hyperframes clean --dry-run`.
+- The skills install command drops the removed `--full-depth` flag.
+
 ### You do not render a file to review a cut any more
 
 - New `edl_to_ffconcat.py` writes the EDL as a **virtual timeline** — an ffconcat playlist (and optionally an mpv EDL) that plays the cut with no encode at all: `ffplay -f concat -safe 0 -i cut/preview.ffconcat`. On a 379-segment 16-minute cut the timeline resolves in 33ms against 22 minutes for the equivalent render, and was verified pixel-identical (PSNR inf) to source ground truth at four points including random seeks. It carries video and audio together, so A/V sync is reviewable — which an audio-only preview cannot show.

@@ -54,7 +54,7 @@ One row per beat, per PIPELINE.md's engine-neutral contract:
 | id | start | dur | end | anchor word | anchor ts | spoken phrase | type | engine | asset | composition |
 |---|---|---|---|---|---|---|---|---|---|---|
 
-`composition` is a named registry block or a one-line description. mc-beats always writes every column. The reserved placeholder `overlay` exists only for READING a legacy 0.x table under PIPELINE.md's tolerance rule (missing `type` reads as `overlay`, missing `engine` is the engine-policy default, missing `asset` is `null`); the revised table is written with all columns filled and every `overlay` replaced by a type from the profile's `beat-types`.
+`composition` is a named registry block or a one-line description. Before describing one, search the HyperFrames registry for the beat (`npx hyperframes catalog --query "<the beat in plain words>"`) and name the block when one fits. mc-beats always writes every column. The reserved placeholder `overlay` exists only for READING a legacy 0.x table under PIPELINE.md's tolerance rule (missing `type` reads as `overlay`, missing `engine` is the engine-policy default, missing `asset` is `null`); the revised table is written with all columns filled and every `overlay` replaced by a type from the profile's `beat-types`.
 
 ## Write and verify
 
