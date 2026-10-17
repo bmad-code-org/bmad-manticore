@@ -99,11 +99,21 @@ Two platform notes: on a CUDA machine the onnx-asr lane escalates to GPU with `u
 
 Render-first does not lock you out of your editor; the exit ramp is always built. Tell mc-setup what you finish in:
 
-- DaVinci Resolve or Final Cut Pro: an FCPXML timeline of trimmable clips (implemented), exported on every cut approval. Linux note: the free edition of Resolve cannot decode or encode H.264, H.265, or AAC, so the timeline imports but mp4 media needs transcoding to ProRes or DNxHR first (or Resolve Studio).
+- DaVinci Resolve or Final Cut Pro: an FCPXML timeline of trimmable clips (implemented), exported on every cut approval. With DaVinci Resolve Studio, see the Resolve lane below. Linux note: the free edition of Resolve cannot decode or encode H.264, H.265, or AAC, so the timeline imports but mp4 media needs transcoding to ProRes or DNxHR first (or Resolve Studio).
 - Premiere Pro: the xmeml export lane has not landed yet, so Premiere users work from the cut plan, edl.json, and the rendered preview/final, which map 1:1 onto manual cuts.
 - Descript or anything else: set `timeline-format = "none"`. You get the word-level transcript, cut decisions with reasons, and the renders; you apply the cuts in your tool.
 
 Whatever the editor, motion graphics arrive as ProRes 4444 MOVs with alpha, which everything accepts.
+
+### The DaVinci Resolve lane
+
+If you finish in DaVinci Resolve Studio, Manticore works inside Resolve wherever it can. Each new video gets its own Resolve project. The cut arrives as a timeline with blue markers at beat changes and red markers at large cuts, checked frame by frame against the cut plan. Text graphics can arrive as Fusion titles you edit in Resolve, and the gate 4 final render runs in Resolve with your render preset and loudness target. The free edition of Resolve refuses outside scripts, so free users get the FCPXML timeline and import it by hand.
+
+Setup asks for three things in Resolve. Set Preferences > System > General > External scripting using to Local. Click Allow when Resolve asks the first time a script connects. And keep no unsaved project with work in it open while Manticore runs, because a Save As dialog blocks every script until you answer it.
+
+The presets are yours, created in Resolve and named in `[editor]`: `resolve-project-preset` for new video projects, `resolve-render-preset` and `resolve-loudness` (a Resolve normalization mode such as `YouTube`) for the final render, an optional `resolve-fairlight-preset`, and `resolve-title-template` for Fusion titles (`Text+` by default, empty to keep text graphics as baked alpha). Setup checks every name against what your Resolve lists and reports any it cannot find.
+
+Resolve Studio 21.1 and later also ships Blackmagic's own MCP server, set up from File > Setup AI Assistants inside Resolve. It lets your AI assistant work in Resolve with you: grades, LUTs, renames, one-off automations. Manticore's stages do not need it; setup records whether you have it.
 
 ## 8. Your generation tools (CLI-first, metered opt-in)
 

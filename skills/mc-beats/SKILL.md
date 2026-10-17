@@ -77,6 +77,20 @@ verify_anchors.py covers anchor placement and nothing else. These are the checks
 - Every asset-bearing row respects the Production Bible's image-type policy (diagrammatic vs generative vs real) for its purpose.
 - No generated-asset rows in formats whose profile bans generated b-roll.
 
+## Beats in Resolve
+
+When `[editor] name` is `resolve` and `cut/resolve-import.json` exists, put the passed table on the creator's Resolve cut timeline so they can review gate 3 there:
+
+```
+uv run {skill-root}/scripts/resolve_beat_markers.py beats/beats.md --import cut/resolve-import.json -o beats/resolve-markers.json
+```
+
+One marker per beat at its `start`, as long as its `dur`, named `<id> <type>`, with the composition and spoken phrase as the note. Colors follow the type: `cta` is Yellow, and every other type gets a stable color from its name, never the Blue and Red of mc-cut's cut markers; the name always carries the type, so two types sharing a color stay distinct. Each run replaces this script's earlier markers and leaves every other marker alone. Beats on the same frame merge into one marker, and a beat landing on a frame another marker holds moves up to 5 frames later; tell the creator about any `merged` or `nudged` beats in the report.
+
+Exit 1 means a marker is missing, misplaced or stale, or the cut timeline failed its own import check: report the first problem and do not send the creator to Resolve for this review. Exit 4 means Resolve Studio is not reachable: say so with the fix it printed and continue; `beats/beats.md` is the gate 3 artifact either way. No `cut/resolve-import.json` means the cut was never imported into Resolve; say so rather than running the script.
+
+Re-run it whenever the table changes after this point.
+
 ## Gate 3
 
 Update `artifacts` in project.json (`"beats": "beats/beats.md"`, `"storyboard": "beats/STORYBOARD.md"`), set `approvals.beats = "pending"`, present the table, and STOP. Gate 3 is a hard stop; only the creator's explicit approval moves it. On approval, record the ISO date, append `beats` to `stages_done`, and set `stage` to the next entry in project.json's `stages` array.

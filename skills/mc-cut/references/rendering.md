@@ -77,7 +77,11 @@ Composited, once the graphics stage has rendered overlays into `graphics/`, add:
 Report any `overlays_missing` from the summary; each one is a beat whose overlay
 has not landed in `graphics/`.
 
+Beats listed in `titles_in_resolve_only` are Fusion titles from `graphics/titles.json`. They are not missing, but this preview does not show them; tell the creator to review them in Resolve.
+
 ## Final render, offered at gate 4
+
+When `[editor] name` is `resolve`, the final render runs in Resolve; see the next section. Every other editor uses `render_final.py`:
 
 ```
 uv run {skill-root}/scripts/render_final.py cut/edl.json \
@@ -104,6 +108,32 @@ whose inputs actually changed. A single tweaked graphic on a long video is a
 seconds-long re-render, so re-rendering after a small fix is cheap and there is
 no reason to batch changes to avoid it. `--segment-target-seconds` (default 600)
 tunes segment size.
+
+## Final render in Resolve
+
+On the Resolve lane the creator finishes in Resolve, so the final is rendered from their timeline there, not from `cut/edl.json`:
+
+```
+uv run {skill-root}/scripts/resolve_render.py --project <slug> -o renders/final.mp4 \
+    --render-preset "<[editor] resolve-render-preset>" \
+    --loudness "<[editor] resolve-loudness>" \
+    --fairlight-preset "<[editor] resolve-fairlight-preset>" \
+    --report renders/final-render.json
+```
+
+It renders the project's current timeline; add `--timeline "<name>"` when the creator names another, and say which timeline was rendered. Pass every config value, empty ones included: an empty preset renders with Resolve's "H.264 Master" and an empty loudness mode skips normalization, and the script states each fallback.
+
+Before running, tell the creator that normalization sets clip gain on every audio item in their timeline. The gains before and after land in the report, and this puts the before values back:
+
+```
+uv run {skill-root}/scripts/resolve_render.py --restore-gains renders/final-render.json
+```
+
+Resolve's normalization stops raising gain at the mode's peak ceiling, so a dynamic take can land well under target. The script measures the render and fails when a mode with a known target (YouTube -14, EBU R128 -23, ATSC A/85 -24 LUFS) misses by more than 1 LU. The fix is a limiter in the creator's Fairlight preset. When the creator accepts the level as it is, re-run with `--accept-loudness "<their reason>"`; the reason lands in the report.
+
+Exit 1 publishes nothing and leaves any earlier `renders/final.*` in place; report the reason it printed. Exit 4 means Resolve Studio is not reachable: offer `render_final.py` from the EDL instead and say it will not include the creator's Resolve edits. The preset decides the container, so "H.264 Master" and ProRes presets publish `renders/final.mov`; name the file the summary reports. If the script is interrupted, Resolve keeps rendering; stop the job in Resolve's Deliver page.
+
+The fast preview lane is unchanged: previews render with ffmpeg whatever the editor.
 
 ## Editor timeline export
 

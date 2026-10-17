@@ -25,7 +25,17 @@ Two lanes. Retro routes the creator's notes into the files that would have preve
 
 ## Collecting the notes
 
-Read the target format profile too before asking for anything, so every file that may receive an edit is loaded. Then take one round of notes: what felt wrong, what they re-edited in their editor, what they rewrote in the script, what looked off on screen, packaging performance (Test & Compare results if run). One round per session; do not fish for endless feedback.
+Read the target format profile too before asking for anything, so every file that may receive an edit is loaded.
+
+When `[editor] name` is `resolve` and `cut/resolve-import.json` exists, measure what the creator changed in Resolve before asking. Confirm which timeline they finished on; the default is the current timeline in the Resolve project named for the slug. Then:
+
+```
+uv run {skill-root}/scripts/resolve_diff.py --edl cut/edl.json --project <slug> --timeline "<name>" --export retro/final-timeline.otio -o retro/resolve-diff.md --json retro/resolve-diff.json
+```
+
+It diffs track 1 against the EDL (segments trimmed, extended, split, joined, removed, added or moved, in source seconds) and counts the tracks the creator added above V1 and A1. Exit 1 means it could not parse the export, or the timeline does not use the EDL's sources: ask for the right timeline. Exit 4 means Resolve Studio is not reachable: the creator can export the timeline as OTIO by hand and you re-run with `--otio <file>` in place of `--project`. Show the creator `retro/resolve-diff.md` and ask what drove the changes. A pattern across several segments (every head trimmed, removed asides restored) is one note under the repeated-override rule below; the diff is evidence, never a note on its own.
+
+Then take one round of notes: what felt wrong, what they re-edited in their editor, what they rewrote in the script, what looked off on screen, packaging performance (Test & Compare results if run). One round per session; do not fish for endless feedback.
 
 ## Routing
 

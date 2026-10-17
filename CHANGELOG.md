@@ -2,6 +2,21 @@
 
 All notable changes to BMad Manticore are documented here. Dates are ISO (YYYY-MM-DD).
 
+## Unreleased
+
+### DaVinci Resolve lane
+
+When `[editor] name` is `resolve`, Manticore drives DaVinci Resolve Studio in every stage it can, through scripts that call Resolve's scripting API and fail loudly when something is off. Other editors keep the fcpxml lane unchanged. Blackmagic's MCP server (Resolve 21.1, File > Setup AI Assistants) is offered for the creator's own interactive work; no stage needs it.
+
+- mc-setup checks for Resolve Studio and validates the new `[editor]` keys (`resolve-project-preset`, `resolve-render-preset`, `resolve-loudness`, `resolve-fairlight-preset`, `resolve-title-template`) against the presets Resolve actually lists. mc-new creates each video's Resolve project.
+- mc-cut imports the cut into Resolve as a new timeline with beat and cut markers, and checks every clip against the fcpxml frame by frame (`resolve_import.py`).
+- mc-beats puts the beat table on the cut timeline as review markers for gate 3.
+- mc-graphics places overlays above the cut and builds plain text beats as editable Fusion titles on a nested titles timeline, with frame-exact checks and a test render of every title (`resolve_place.py`).
+- The gate 4 final render runs in Resolve from the creator's own timeline (`resolve_render.py`). It checks frame count and measured loudness and publishes atomically; its audio normalization can be undone.
+- mc-package builds captions from Resolve's subtitles, thumbnail frames from the cut timeline, and chapters from its markers, with scripted caption and chapter checks (YouTube's rules: first at 0:00, at least three, each at least 10 seconds).
+- mc-retro opens by diffing the creator's finished Resolve timeline against the cut.
+- `verify_transcript.py` fails a transcript with no fillers over two minutes of speech. Resolve's own transcription stripped every filler and passed the old checks, so it stays off the `[transcription]` switch.
+
 ## 3.1.0 - Unreleased
 
 Reviewing a cut no longer means waiting for a render. Everything here came out of one real 20-minute 4K project whose gate-2 preview took 22 minutes to encode — twice, because the first one failed validation at the finish line.

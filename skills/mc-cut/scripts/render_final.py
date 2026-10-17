@@ -642,6 +642,8 @@ def main(argv=None):
         "encoder": encoder,
         "overlays": len(overlays),
         "overlays_missing": missing,
+        "titles_in_resolve_only": sorted(core.title_ids(args.graphics_dir))
+        if args.beats and args.graphics_dir else [],
         "expected_duration_seconds": round(total, 3),
         "actual_duration_seconds": round(actual, 3) if actual is not None else None,
         "loudnorm": loudnorm,

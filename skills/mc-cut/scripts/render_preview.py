@@ -420,6 +420,8 @@ def main(argv=None):
         summary["overlays"] = len(overlays)
         summary["overlay_lanes"] = lane_count
         summary["overlays_missing"] = missing
+        summary["titles_in_resolve_only"] = sorted(
+            core.title_ids(args.graphics_dir)) if args.graphics_dir else []
     print(json.dumps(summary, indent=2))
     return 0
 

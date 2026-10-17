@@ -161,7 +161,7 @@ Two entry points run after the `cut` stage has closed. Both touch no gates, appr
 
 Composited preview: mc-pipeline routes here once mc-graphics writes `graphics/HANDOFF.md`, and again whenever an overlay is re-rendered. Re-render the preview composited per `{skill-root}/references/rendering.md`, report any `overlays_missing`, present it, and stop.
 
-Final render: when the project reaches the final stage, offer the final-quality render per `{skill-root}/references/rendering.md`. Finishing in the creator's own editor from the exported timeline is an equally supported path; either closes gate 4.
+Final render: when the project reaches the final stage, offer the final-quality render per `{skill-root}/references/rendering.md`. When `[editor] name` is `resolve`, that is `resolve_render.py`, which renders the creator's Resolve timeline, checks the frame count and measured loudness, and publishes atomically. Otherwise it is `render_final.py` from the EDL. Finishing in the creator's own editor from the exported timeline is an equally supported path; either closes gate 4.
 
 ## Cutting rules (non-negotiable)
 
@@ -180,6 +180,7 @@ Final render: when the project reaches the final stage, offer the final-quality 
 | Cut integrity | `verify_edl.py` | Propose the cut, and again after applying |
 | Output integrity | `render_preview.py` / `render_final.py` | Deliver |
 | Resolve timeline sync | `resolve_import.py` | Propose the cut, when `[editor] name` is `resolve` |
+| Resolve final render | `resolve_render.py` | Final render, when `[editor] name` is `resolve` |
 
 Three things no script can check, so they are on you:
 
