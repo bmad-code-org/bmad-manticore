@@ -2,7 +2,9 @@
 
 All notable changes to BMad Manticore are documented here. Dates are ISO (YYYY-MM-DD).
 
-## Unreleased
+## 4.0.0 - 2026-10-16
+
+DaVinci Resolve Studio in every stage, and a transcript gate that catches a transcriber stripping fillers. 3.0.0 and 3.1.0 below shipped on main without a tagged release; 4.0.0 is the first tagged release since 1.0.1 and includes them.
 
 ### DaVinci Resolve lane
 

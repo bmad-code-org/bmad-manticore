@@ -56,9 +56,9 @@ What the interview covers, in order:
 
 Manticore renders by default, and setup asks you to confirm it rather than assume it:
 
-- A fast low-res preview render is produced after every cut-plan approval, so every iteration is watchable.
+- Every cut-plan iteration is watchable instantly on a virtual timeline, a frame-exact playlist of your source with no render at all.
 - Once the graphics stage has rendered the overlays, the preview re-renders with them composited, so you iterate on overlays and CTAs visually.
-- At the final gate, a final-quality render is offered (delivery resolution and codec per your config), loudness-normalized to -14 LUFS by default (two-pass ffmpeg loudnorm; the preview is never normalized; `[render]` loudness-target and loudnorm are the knobs) with hardware encode probed per platform (videotoolbox on macOS; nvenc, qsv, amf on Windows; nvenc, vaapi on Linux; libx264 fallback).
+- At the final gate, a final-quality render is offered (delivery resolution and codec per your config), loudness-normalized to -14 LUFS by default (two-pass ffmpeg loudnorm; the preview is never normalized; `[render]` loudness-target and loudnorm are the knobs) with hardware encode probed per platform (videotoolbox on macOS; nvenc, qsv, amf on Windows; nvenc, vaapi on Linux; libx264 fallback). On the Resolve lane the final render runs in Resolve Studio instead, with your render preset and loudness mode.
 - The editor timeline export and all assets (edl.json, cutplan.md, overlays) are ALWAYS created alongside, so you can jump into Resolve, Premiere, or any editor at any step without losing work.
 
 Decline it and previews and finals become offers the pipeline makes instead of automatic outputs; the timeline export and assets remain always-on either way.
