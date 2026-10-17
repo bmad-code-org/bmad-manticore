@@ -2,7 +2,7 @@
 
 # BMad Manticore
 
-[![Version](https://img.shields.io/badge/version-3.0.0-blue)](.claude-plugin/marketplace.json)
+[![Version](https://img.shields.io/badge/version-4.0.0-blue)](.claude-plugin/marketplace.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python Version](https://img.shields.io/badge/python-%3E%3D3.11-blue?logo=python&logoColor=white)](https://www.python.org)
 [![uv](https://img.shields.io/badge/uv-package%20manager-blueviolet?logo=uv)](https://docs.astral.sh/uv/)
@@ -10,13 +10,17 @@
 
 **From brain dump to a rendered, graphics-rich video, in your own words.**
 
-## New in 3.0
+## New in 4.0
 
-Motion graphics run entirely on [HyperFrames](https://hyperframes.heygen.com), with its Agent Skills installed and favored at setup so the agent can reach the whole toolkit: color grading, background removal, WebGL shader transitions, kinetic captions, data-viz, 3D device mockups, HDR and 4K delivery, and a 100-plus block catalog. It all runs locally, with no account or credits. The final render is incremental (a fix on a long video re-renders in seconds, not minutes), finals are loudness-normalized by default, and Windows, Linux, and Intel Mac lanes are code-complete. The cut stage was rebuilt after its first real 4K project: transcription windows in short isolated passes and is verified for completeness before anything consumes it, cut timing comes from an audio silence map rather than transcript timestamps, renders validate and move into place atomically instead of writing their output path directly, and an editorial pass reads the edited transcript against the brief before gate 2. See the [changelog](CHANGELOG.md) for everything that changed and why.
+If you finish in DaVinci Resolve Studio, Manticore now works inside Resolve at every stage it can. Each video gets its own Resolve project, the cut arrives as a timeline with review markers and is checked frame by frame, the beat table lands as markers for gate 3, graphics are placed above the cut, plain text graphics become Fusion titles you can edit, and the gate 4 final render runs in Resolve with your own render preset and loudness target. Every step is a script that fails loudly when something is off, and Blackmagic's MCP server is offered at setup for your own hands-on work in Resolve. Other editors keep the FCPXML lane.
+
+## New in 3.x
+
+You review a cut without waiting for a render: gate 2 plays a frame-exact virtual timeline instantly. Motion graphics run entirely on [HyperFrames](https://hyperframes.heygen.com), with its Agent Skills installed and favored at setup so the agent can reach the whole toolkit: color grading, background removal, WebGL shader transitions, kinetic captions, data-viz, 3D device mockups, HDR and 4K delivery, and a 100-plus block catalog. It all runs locally, with no account or credits. The final render is incremental (a fix on a long video re-renders in seconds, not minutes), finals are loudness-normalized by default, and Windows, Linux, and Intel Mac lanes are code-complete. The cut stage was rebuilt after its first real 4K project: transcription windows in short isolated passes and is verified for completeness before anything consumes it, cut timing comes from an audio silence map rather than transcript timestamps, renders validate and move into place atomically instead of writing their output path directly, and an editorial pass reads the edited transcript against the brief before gate 2. See the [changelog](CHANGELOG.md) for everything that changed and why.
 
 Upgrading from an earlier version: back up anything custom you want to keep, then remove the `_bmad/` and `_bmad-output/` folders from your studio and reinstall (see [Install](#install)). Start your agent and say `hey manny lets get this all set up!`, then follow onboarding. Your brand kit, voice bible, and format profiles live in your studio folder (not in `_bmad/`), so they survive the reinstall: onboarding finds them, and if it does not, point it at them so it can reuse or update them.
 
-Talk through your video idea for twenty minutes, or hand over footage you already have. Get back a script in your own words, a word-level cut plan for your raw footage, a watchable preview render of every iteration, brand-themed motion graphics with CTAs placed where they work, a title/thumbnail package, and an offered final-quality render at the end. The editor timeline export and all cut assets are always produced alongside, so you can move into your own editor at any step. You approve every taste decision along the way.
+Talk through your video idea for twenty minutes, or hand over footage you already have. Get back a script in your own words, a word-level cut plan for your raw footage you can watch instantly at every iteration, brand-themed motion graphics with CTAs placed where they work, a title/thumbnail package, and an offered final-quality render at the end. The editor timeline export and all cut assets are always produced alongside, so you can move into your own editor at any step. You approve every taste decision along the way.
 
 Manticore is an AI video production pipeline for content creators, packaged as an installable [BMad Method](https://docs.bmad-method.org/) module. It is opinionated but flexible: a wrapper and orchestrator around many great tools (your editor, transcription, generation CLIs, motion graphics engines), with strong defaults and nothing locked in. Every external tool is optional, opt-in gravy; the core pipeline needs only uv, ffmpeg, node, and git.
 
@@ -26,7 +30,7 @@ Manticore is an AI video production pipeline for content creators, packaged as a
 
 - A script woven from your own recorded brain-dump words under a quote-or-cut contract, linted against a blacklist of LLM tells and a 16-rule craft checklist. It sounds like you because it is you.
 - A cut plan that itemizes only the calls you might disagree with, each with a timestamp and the quoted words: "trailing 'so' at 42:20, keep or cut?"
-- A render at every step: a fast low-res preview after every cut approval, the same preview re-rendered with graphics composited once the graphics stage has rendered the overlays, and a final-quality render offered at the last gate. The final render is incremental: the timeline is cached as content-addressed segments, so re-rendering after a tweaked graphic or a re-cut region touches only what changed, turning a fix on a long video into a seconds-long render. The editor timeline export, edl.json, cutplan, and overlays are always written too, so jumping into your editor never loses work.
+- A cut you can review instantly: gate 2 plays a frame-exact virtual timeline with no render at all. Files get rendered when something needs one: the preview re-rendered with graphics composited once the graphics stage has rendered the overlays, and a final-quality render offered at the last gate. The final render is incremental: the timeline is cached as content-addressed segments, so re-rendering after a tweaked graphic or a re-cut region touches only what changed, turning a fix on a long video into a seconds-long render. The editor timeline export, edl.json, cutplan, and overlays are always written too, so jumping into your editor never loses work.
 - Motion graphics planned under creativity mandates and your visual density tier, styled by your Production Bible, delivered as brand-themed alpha overlays (ProRes 4444, works in every NLE), anchored to the exact words you speak.
 - CTAs planned like beats: your configured CTA inventory placed at research-backed seams, approved by you in the same gate as every other graphic.
 - Titles, thumbnails (A/B pairs for series), description, chapters, and uploadable SRT/VTT captions with a publishable transcript of the edited timeline, built around a packaging promise you approved before the script was written.
@@ -34,7 +38,7 @@ Manticore is an AI video production pipeline for content creators, packaged as a
 
 ## How a video happens
 
-![The Manticore pipeline: talk to Manny, brain dump to outline (gate 1) to script to recording, or bring existing footage straight to the cut; then cut with a preview render every iteration (gate 2), graphics beats (gate 3), graphics and assets, packaging, the final render offer or finishing in your editor (gate 4), and retro, which edits the pipeline's own files so the next video starts smarter](docs/assets/pipeline.svg)
+![The Manticore pipeline: talk to Manny, brain dump to outline (gate 1) to script to recording, or bring existing footage straight to the cut; then cut, reviewed on an instant virtual timeline (gate 2), graphics beats (gate 3), graphics and assets, packaging, the final render offer or finishing in your editor (gate 4), and retro, which edits the pipeline's own files so the next video starts smarter](docs/assets/pipeline.svg)
 
 Prefer to see it by scenario? Two slide guides ship in docs/ (open them in a browser): [Working with Manny](docs/manny-scenarios.html) covers setup day, an idea-first video, bringing existing footage, the weekly livestream, packaging, and the retro loop; [Manny, under the hood](docs/manny-under-the-hood.html) covers the machinery: the tool and model roster, the spoken-idea-to-script-to-re-record flow, the raw-footage recut flow, the render pipeline, and the graphics engines.
 
@@ -91,7 +95,7 @@ Manticore orchestrates tools; it does not replace them. The defaults are local a
 
 | Tool | What it provides | Cost model |
 |---|---|---|
-| Your editor (DaVinci Resolve, Final Cut Pro, Premiere Pro, Descript, anything) | Where you can finish any time you want to. Resolve/FCP get an FCPXML timeline; Premiere users work from the cut plan, edl.json, and the rendered preview/final until the xmeml lane lands; `timeline-format = "none"` gives you the cut plan, edl.json, and renders to apply in any tool | You already have it |
+| Your editor (DaVinci Resolve, Final Cut Pro, Premiere Pro, Descript, anything) | Where you can finish any time you want to. With DaVinci Resolve Studio, Manticore works inside Resolve at every stage (project, cut timeline with markers, beat markers, graphics and Fusion titles, final render, captions and chapters, retro diff); Resolve's free edition and FCP get an FCPXML timeline; Premiere users work from the cut plan, edl.json, and the rendered preview/final until the xmeml lane lands; `timeline-format = "none"` gives you the cut plan, edl.json, and renders to apply in any tool | You already have it |
 | parakeet-mlx / onnx-asr | Word-level cutting transcripts with verbatim fillers (the "um"s are exactly what gets cut); parakeet-mlx on Apple Silicon, onnx-asr running the same parakeet-tdt-0.6b-v3 weights on Windows, Linux, and Intel Mac | Free, runs locally, no API key |
 | Kokoro-82M (kokoro-onnx) | TTS narration and two-host dialogue for the mc-audio lane (stock voices, no cloning) | Free, local, faster than realtime on CPU |
 | MusicGen-small + AudioLDM2 | Instrumental music beds and SFX, farmed locally by mc-audio | Free, local, ungated models |
@@ -132,9 +136,9 @@ Seven ship by default: talking-head, screen-tutorial (real UI only, generated b-
 | mc-braindump | Interview you; capture your exact words verbatim (camera-rolling optional) |
 | mc-outline | 3 hooks + one outline + the packaging promise (gate 1) |
 | mc-script | Weave the script from your words; lint; craft QA |
-| mc-cut | Word-level transcript, cut plan with taste calls (gate 2), edl.json, preview render every iteration, timeline export, the offered final render |
+| mc-cut | Word-level transcript, cut plan with taste calls (gate 2) reviewed on a virtual timeline, edl.json, timeline export (into Resolve on the Resolve lane), the offered final render (in Resolve on the Resolve lane) |
 | mc-beats | The graphics beat table anchored to spoken words, under creativity mandates and your density tier, with a CTA placement pass (gate 3) |
-| mc-graphics | Execute beats in HyperFrames / HTML / design-prompting; frame-verified alpha overlays |
+| mc-graphics | Execute beats in HyperFrames / HTML / design-prompting; frame-verified alpha overlays, placed in Resolve with editable Fusion titles on the Resolve lane |
 | mc-assets | Farm b-roll stills/clips via your registered CLI tools (metered APIs opt-in), under generative-editing safety rules |
 | mc-audio | Farm sound, local-first: TTS narration and two-host dialogue (Kokoro-82M), instrumental beds (MusicGen-small), SFX (AudioLDM2); paid lanes opt-in |
 | mc-package | Titles, thumbnails (verified at 120px), description, chapters, SRT/VTT captions and transcript, series A/B pairs, live-event mode |
@@ -147,10 +151,11 @@ Taste lives in files (your voice bible, Production Bible, format profiles, brand
 
 ## Status
 
-3.0.0 is shaped by real production use. Honest state as of 2026-07-23:
+4.0.0 is shaped by real production use. Honest state as of 2026-10-16:
 
 - Proven in production: the full cut lane (parakeet-mlx word-level transcription validated on real footage, cut candidate detection, edl.json, FCPXML export, preview render with boundary-frame verification), Manny as the front door, setup and dependency checking, config resolution, project scaffolding, the render lane (composited preview and the offered final render), the expanded setup interview, the Production Bible, creativity mandates and the CTA system, footage-first ingest, series support, the graphics toolkit, CLI-registry asset farming, the OBS stream pack, the mc-audio local sound lanes (validated end to end on Apple Silicon), and the retro loop.
-- New in 3.0, implemented and unit-tested, with the least real-project mileage: HyperFrames as the sole motion-graphics engine with its Agent Skills installed at setup, the incremental content-addressed final render, default -14 LUFS loudness normalization, and the cross-platform stack (onnx-asr transcription and the per-OS hardware-encoder ladders on Windows, Linux, and Intel Mac) — code-complete and covered by tests, but treat the first run on non-Apple-Silicon hardware as a shakedown.
+- New in 4.0 and live-tested against Resolve Studio 21.1.1: the Resolve lane's cut import, beat markers, graphics and Fusion titles, final render, and retro diff. Unit-tested only so far: its captions, thumbnail frames and chapters, and creating a new video's Resolve project. Resolve's own loudness normalization stops at the loudest peak, so a dynamic take needs a limiter in your Fairlight preset to reach -14 LUFS.
+- New in 3.x, implemented and unit-tested, with the least real-project mileage: HyperFrames as the sole motion-graphics engine with its Agent Skills installed at setup, the incremental content-addressed final render, default -14 LUFS loudness normalization, and the cross-platform stack (onnx-asr transcription and the per-OS hardware-encoder ladders on Windows, Linux, and Intel Mac) — code-complete and covered by tests, but treat the first run on non-Apple-Silicon hardware as a shakedown.
 - The writing lane (braindump, outline, script) is the core promise and is wired end to end with live blacklist linting; it has had the least real-video exercise of the core stages, so treat your first run through it as a shakedown and feed mc-retro afterward.
 - Planned: Premiere (xmeml) and CMX3600 EDL export lanes, per-episode stream packs with the Ecamm target (the named 1.0.x fast-follow), multitrack recording support, the remaining audio lanes (full songs with vocals, plus the paid opt-in rungs of the audio ladder), and a research/show-prep skill. See [TODO.md](TODO.md) for the full roadmap.
 
