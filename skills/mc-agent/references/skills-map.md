@@ -6,7 +6,7 @@ One routing card per Manticore skill: what it does, when Manny routes there, wha
 
 ### mc-setup
 
-Builds and tunes the studio: BMad core bootstrap, dependency and platform checks, the full onboarding interview (identity, editor, render consent, video style with creator-emulation links, CTAs, audio lanes), brand build (tokens, Production Bible, headshots, guided voice bible), CLI tool registration with end-to-end verification, `.env.example`, 0.x migration. Route here on any missing-config report, for any tool or lane change, and for every new creator. Needs nothing; it is the floor everything stands on. Idempotent: re-runs edit surgically.
+Builds and tunes the studio: BMad core bootstrap, dependency and platform checks, the full onboarding interview (identity, editor, render consent, video style with creator-emulation links, CTAs, audio lanes), brand build (tokens, Production Bible, headshots, guided voice bible), CLI tool registration with end-to-end verification, `.env.example`, 0.x migration. When the editor is Resolve, it checks for Resolve Studio, validates the Resolve preset names, and offers Blackmagic's MCP for the creator's hands-on work in Resolve. Route here on any missing-config report, for any tool or lane change, and for every new creator. Needs nothing; it is the floor everything stands on. Idempotent: re-runs edit surgically.
 
 ### mc-pipeline
 
@@ -14,7 +14,7 @@ The master contract: stage table, gates, project.json, engine policy. Route here
 
 ### mc-new
 
-Scaffolds a project from a format profile. Two entries: idea-first (pick a format, get the full stage list) and footage-first ingest (an existing recording or livestream VOD gets a post-production stage list starting at cut, source registered). Series and deadline modes. Needs the studio config.
+Scaffolds a project from a format profile. Two entries: idea-first (pick a format, get the full stage list) and footage-first ingest (an existing recording or livestream VOD gets a post-production stage list starting at cut, source registered). Series and deadline modes. When the editor is Resolve, it also creates the video's Resolve project. Needs the studio config.
 
 ## The write phase (idea-first only)
 
@@ -34,17 +34,17 @@ Weaves the script from the creator's own words, lints against the blacklist, run
 
 ### mc-cut
 
-Word-level transcript (parakeet-mlx by default), the cut plan with taste calls presented one by one. GATE 2. Every approval produces a fast preview render plus the editor timeline export; after graphics it re-renders the preview composited; at gate 4 it offers the final-quality render. Needs recorded takes in `raw/` (or the ingested source). The center of gravity for every project.
+Word-level transcript (parakeet-mlx by default), the cut plan with taste calls presented one by one. GATE 2, reviewed on a virtual timeline with no render. Every approval exports the editor timeline; when the editor is Resolve the cut also lands in Resolve as a new timeline with review markers. After graphics it re-renders the preview composited; at gate 4 it offers the final render, run in Resolve when the editor is Resolve. Needs recorded takes in `raw/` (or the ingested source). The center of gravity for every project.
 
 ### mc-beats
 
-Riffs graphic and treatment ideas with the creator first, then builds the beat table (every graphic anchored to a spoken word) under the creativity mandates, the density tier, and the CTA placement pass. GATE 3. Needs the approved cut. The medium mix (cards, diagrams, imagery, clips, memes) follows the Production Bible plus the riff, never a default.
+Riffs graphic and treatment ideas with the creator first, then builds the beat table (every graphic anchored to a spoken word) under the creativity mandates, the density tier, and the CTA placement pass. GATE 3. When the editor is Resolve, the beat table also lands on the cut timeline as markers. Needs the approved cut. The medium mix (cards, diagrams, imagery, clips, memes) follows the Production Bible plus the riff, never a default.
 
 ## Production services
 
 ### mc-graphics
 
-Executes the approved beat table in HyperFrames / HTML / design-prompting; frame-verified ProRes 4444 alpha overlays plus HANDOFF.md. Routes whooshes and beds to mc-audio. Needs gate 3 approved.
+Executes the approved beat table in HyperFrames / HTML / design-prompting; frame-verified ProRes 4444 alpha overlays plus HANDOFF.md. When the editor is Resolve, it places the overlays above the cut in Resolve and builds plain text beats as editable Fusion titles. Routes whooshes and beds to mc-audio. Needs gate 3 approved.
 
 ### mc-assets
 
@@ -58,7 +58,7 @@ Service skill, no stage or gate: farms sound the way mc-assets farms pictures. L
 
 ### mc-package
 
-Titles, face-plus-hook thumbnails (drafted programmatically, improved through the image lane, verified at 120px), description, CTA metadata, dual-timeline chapters, series A/B pairs, live-event mode. May start ANY time after gate 1; offer it during dead time instead of letting it pile up at the end. Needs approved outline (or the transcript on footage-first) and headshots for face thumbnails.
+Titles, face-plus-hook thumbnails (drafted programmatically, improved through the image lane, verified at 120px), description, CTA metadata, dual-timeline chapters, series A/B pairs, live-event mode. When the editor is Resolve, captions, thumbnail frames and chapters come from the Resolve timeline. May start ANY time after gate 1; offer it during dead time instead of letting it pile up at the end. Needs approved outline (or the transcript on footage-first) and headshots for face thumbnails.
 
 ### mc-stream-pack
 
@@ -68,7 +68,7 @@ A complete branded OBS asset pack (scenes, stinger, lower thirds) from brand tok
 
 ### mc-retro
 
-One round of creator notes edits the format profile, the bibles, and the brand files, ISO-dated and append-only, so the next video starts smarter. Then the post-publish wrap (archive hygiene, evergreen assets). Route here after every published video; this is how the studio compounds.
+One round of creator notes edits the format profile, the bibles, and the brand files, ISO-dated and append-only, so the next video starts smarter. When the editor is Resolve, it starts by diffing the creator's finished Resolve timeline against the cut. Then the post-publish wrap (archive hygiene, evergreen assets). Route here after every published video; this is how the studio compounds.
 
 ## Formats
 

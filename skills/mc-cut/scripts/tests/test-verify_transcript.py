@@ -242,7 +242,9 @@ class TestTheRealFailure(unittest.TestCase):
                     end = e
                 if include_drops or not any(ds <= t < de
                                             for ds, de in self.DROPS):
-                    spans.append((f"w{idx}", round(t, 3), round(end, 3)))
+                    # A real read carries fillers; the gate checks for them.
+                    text = "um" if idx % 50 == 0 else f"w{idx}"
+                    spans.append((text, round(t, 3), round(end, 3)))
                 idx += 1
                 t = end
         return words_from(spans)
@@ -547,6 +549,44 @@ class TestAcceptanceCLI(unittest.TestCase):
             extra=["--accept-region", "3.0-4.0", "--reason", "partial"],
             expect=1)
         self.assertFalse(report["ok"])
+
+
+class TestVerbatimFillers(unittest.TestCase):
+    """A transcriber that normalizes fillers away loses no speech, so only
+    this check catches it (Resolve 21.1 transcription, 2026-10-16)."""
+
+    def words(self, n, filler_every=None):
+        return words_from([
+            ("uh," if filler_every and i % filler_every == 0 else f"w{i}",
+             i * 0.3, i * 0.3 + 0.3) for i in range(n)])
+
+    def test_zero_fillers_over_enough_speech_fails(self):
+        self.assertFalse(vt.filler_check(self.words(600), 180.0)["ok"])
+
+    def test_fillers_pass_and_punctuation_is_ignored(self):
+        r = vt.filler_check(self.words(600, filler_every=100), 180.0)
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["fillers"], 6)
+
+    def test_short_speech_is_not_judged(self):
+        self.assertTrue(vt.filler_check(self.words(200), 60.0)["ok"])
+
+    def test_creator_acceptance_passes_and_is_recorded(self):
+        r = vt.filler_check(self.words(600), 180.0,
+                            accepted_reason="scripted read")
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["accepted_reason"], "scripted read")
+
+    def test_cli_fails_a_normalized_transcript(self):
+        words = self.words(600)
+        amap = audio_map(180.0, [])
+        report, r = run_cli({"words": words}, amap, expect=1)
+        self.assertFalse(report["checks"]["fillers"]["ok"])
+        self.assertIn("NOT VERBATIM", r.stderr)
+
+    def test_cli_acceptance_needs_a_reason(self):
+        run_cli({"words": self.words(600)}, audio_map(180.0, []),
+                extra=["--accept-no-fillers", " "], expect=2)
 
 
 if __name__ == "__main__":

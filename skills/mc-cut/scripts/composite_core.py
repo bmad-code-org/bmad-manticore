@@ -174,14 +174,32 @@ def parse_beats_table(text):
 OVERLAY_EXTS = (".mov", ".webm", ".mp4", ".mkv", ".png")
 
 
+def title_ids(graphics_dir):
+    """Beat ids built as Fusion titles in Resolve (graphics/titles.json).
+
+    Those beats have no baked file by design, so they are never missing; this
+    pipeline's renders do not show them, only Resolve's do.
+    """
+    path = Path(graphics_dir) / "titles.json"
+    if not path.is_file():
+        return set()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    return {str(t["id"]) for t in data if isinstance(t, dict) and t.get("id")}
+
+
 def resolve_overlays(beats, graphics_dir):
     """Match each beat id to a rendered overlay file in graphics_dir.
 
     Looks for <id>.mov / .webm / .mp4 / .mkv / .png (first hit wins, in that
     order). Returns (found, missing): found as overlay dicts {id, path, start,
-    dur, image} sorted by start, missing as the beat ids with no file.
+    dur, image} sorted by start, missing as the beat ids with no file and no
+    entry in graphics/titles.json.
     """
     graphics_dir = Path(graphics_dir)
+    titles = title_ids(graphics_dir)
     found, missing = [], []
     for b in beats:
         path = None
@@ -191,7 +209,8 @@ def resolve_overlays(beats, graphics_dir):
                 path = cand
                 break
         if path is None:
-            missing.append(b["id"])
+            if b["id"] not in titles:
+                missing.append(b["id"])
             continue
         found.append({
             "id": b["id"],

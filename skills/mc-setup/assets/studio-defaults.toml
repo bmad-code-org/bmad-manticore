@@ -106,6 +106,27 @@ name = "resolve"
 #   "none"    skip timeline export; you get edl.json + cutplan.md + preview.mp4
 #             and cut manually in your editor (Descript and others)
 timeline-format = "fcpxml"
+# DaVinci Resolve lane: read only when name = "resolve". Needs DaVinci Resolve
+# Studio running with Preferences > System > General > External scripting
+# using: Local; the free edition refuses scripts and stays on the fcpxml lane.
+# Every name below is one you create in Resolve; a name Resolve does not list
+# fails mc-setup's check rather than being swapped for another.
+# Project settings preset applied to each new video's Resolve project.
+# "" means Resolve's default settings, said aloud when the project is created.
+resolve-project-preset = ""
+# Render preset for the gate 4 final render. "" means "H.264 Master", said
+# aloud at render time.
+resolve-render-preset = ""
+# Loudness normalization before the final render: a mode Resolve lists in
+# its Normalize Audio Levels modes ("YouTube", "EBU R128", ...). "" skips
+# normalization, said aloud at render time.
+resolve-loudness = "YouTube"
+# Fairlight preset applied before the final render. "" applies none.
+resolve-fairlight-preset = ""
+# Fusion title used for text graphics on the Resolve lane, editable in
+# Resolve or through Blackmagic's MCP. "" turns Fusion titles off and text
+# graphics stay baked alpha.
+resolve-title-template = "Text+"
 
 [defaults.transcription]
 
@@ -191,6 +212,11 @@ workspace = "audio-lab"
 
 # MCP servers mc-setup has verified in this project. Skills treat false/absent
 # as "not available" and fall back gracefully.
+# davinci-resolve: Blackmagic's own MCP server (DaVinci Resolve Studio 21.1+,
+# set up from File > Setup AI Assistants inside Resolve) is configured for
+# this project. It serves the creator's interactive work in Resolve; no
+# pipeline stage needs it, because the Resolve lane drives the scripting API
+# directly.
 davinci-resolve = false
 
 [defaults.cut]

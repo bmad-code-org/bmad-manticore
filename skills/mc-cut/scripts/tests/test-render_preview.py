@@ -919,5 +919,27 @@ class TestSupersedeEndToEnd(unittest.TestCase):
         self.assertEqual(self.out.read_bytes(), good)
 
 
+class TestFusionTitleBeats(unittest.TestCase):
+    """Title beats live in Resolve only (graphics/titles.json): no baked file,
+    and never reported missing."""
+
+    def test_title_beats_are_not_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            g = Path(tmp)
+            (g / "b01.mov").write_bytes(b"")
+            (g / "titles.json").write_text(json.dumps([{"id": "b02", "text": "x"}]))
+            beats = [{"id": i, "start": n, "dur": 1.0}
+                     for n, i in enumerate(["b01", "b02", "b03"])]
+            found, missing = core.resolve_overlays(beats, g)
+            self.assertEqual([o["id"] for o in found], ["b01"])
+            self.assertEqual(missing, ["b03"])
+            self.assertEqual(core.title_ids(g), {"b02"})
+
+    def test_unreadable_titles_file_counts_as_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "titles.json").write_text("{not json")
+            self.assertEqual(core.title_ids(tmp), set())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -23,7 +23,8 @@ invented fresh here.
 
 1. Load the studio config: `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {project-root} --key modules.manticore`. Empty means mc-setup has not run; stop and route the creator there. Resolve `paths` values against `{project-root}`.
 2. Read `project.json` and find the promise. When `stages` includes `outline`, `approvals.outline` must be an ISO date; null or `"pending"` stops the run and routes the creator back to the outline gate. Then read `outline.md` (the packaging promise) and `script.md`. When `stages` has no outline stage (footage-first and livestream projects), the promise comes from the footage: derive it from the final transcript and package only what the video actually delivers.
-3. Read the final transcript if the cut exists, the format profile at `{formats-path}/<format>.md`, and from the studio config `[packaging]` (the caps and counts below), `[cta]` (inventory and appetite) and `[owner]` `links`.
+3. Read the final transcript if the cut exists, the format profile at `{formats-path}/<format>.md`, and from the studio config `[packaging]` (the caps and counts below), `[cta]` (inventory and appetite), `[owner]` `links` and `[editor]` `name`.
+   The Resolve lane is on when `[editor] name` is `resolve` and `cut/resolve-import.json` exists with `"ok": true`. Its `project` and `timeline` values are the `--project` and `--timeline` arguments for every `resolve_*.py` script below. Those scripts exit 4 when Resolve Studio is not reachable: say so, name the fix the script printed, and use the other lane for that deliverable.
 4. Read `{brand-path}/tokens.json`. If it does not exist, tell the creator it is missing and that theming the thumbnail drafts cannot happen without it, then route to mc-setup and stop.
 5. Read `{brand-path}/production-bible.md`. If it does not exist, tell the creator it is missing and that thumbnail style, the series templates it records, and the CTA section cannot happen without it, then route to mc-setup and stop.
 6. Read `{brand-path}/headshots/`. If it does not exist, tell the creator it is missing and that face-plus-hook thumbnails cannot happen without it, then route to mc-setup and stop. Its `index.md` catalogs which expression is which.
@@ -67,6 +68,15 @@ Face-plus-hook is the default treatment: an approved headshot plus a 2 to 4 word
 Presented candidates go to `packaging/thumbs/`; every draft, retry, and proof stays in
 `packaging/work/`.
 
+Footage frames, Resolve lane: grab full-resolution frames from the cut, at the moments that carry the hook's emotion or at the beat markers, with Resolve's still export. It returns the clip as graded in Resolve and leaves out overlays and titles from upper tracks, which is the plate a thumbnail wants. Frames land in `packaging/work/frames/`, since they are inputs, not candidates.
+
+```
+uv run {skill-root}/scripts/resolve_frames.py --project <project> --timeline "<timeline>" --out-dir packaging/work/frames/ --at <M:SS.s> [--at ...]
+uv run {skill-root}/scripts/resolve_frames.py --project <project> --timeline "<timeline>" --out-dir packaging/work/frames/ --from-markers packaging/work/markers.json --marker-color Blue
+```
+
+Look at every frame before using it. Pass the chosen frames to the improvement pass as reference images for the set and lighting. A frame becomes the base of a non-face treatment only on the creator's say-so, and never stands in for a headshot; a frame the creator wants as a headshot goes into `{brand-path}/headshots/` through mc-setup. Exit 1 names each moment that failed to export or decode; re-pick those moments.
+
 ## Pairing and A/B
 
 Present the candidates as title+thumbnail PAIRS (title A with thumbnail A). Within a pair the two
@@ -99,6 +109,22 @@ the script or transcript for that verbal bridge and flag loudly when it is missi
 
 From the edited transcript's beat boundaries: first chapter 0:00, honest labels, no keyword
 stuffing.
+
+On the Resolve lane, read the cut timeline's markers first:
+
+```
+uv run {skill-root}/scripts/resolve_markers.py --project <project> --timeline "<timeline>" -o packaging/work/markers.json
+```
+
+Blue `manticore-beat` markers sit at the beat changes mc-cut imported, and any marker the creator added or moved in Resolve comes back where it is now. Where a marker and a transcript beat boundary disagree, the marker wins: it is the creator's later call. Marker names are beat ids, not labels; write the labels here.
+
+Every chapter list, from either lane, passes the gate before it ships:
+
+```
+uv run {skill-root}/scripts/verify_chapters.py packaging/work/chapters-edited.md --duration <clean_duration from cut/edited-words.json>
+```
+
+Exit 1 means YouTube would drop every chapter: fix the list and re-run.
 
 Whenever `cut/edl.json` exists, chapters are a dual-timeline deliverable. `packaging/chapters.md`
 opens with the paste-ready block in edited (published) timecodes, followed by a clearly labeled
@@ -134,6 +160,22 @@ timeline. A light filler/stutter cleanup runs by default on this derived renditi
 `transcript/words.json` is never modified. Offer the creator `--no-clean` if they want verbatim
 captions. Present `transcript.md` for a skim before calling the deliverable done.
 
+On the Resolve lane, Resolve captions the cut timeline instead. Its transcription drops fillers and false starts, which suits captions, and the creator can correct the subtitle track in Resolve. The script adds a subtitle track to the cut timeline and writes the same three files from it, with cue times taken from the timeline frames:
+
+```
+uv run {skill-root}/scripts/resolve_captions.py --project <project> --timeline "<timeline>" --out-dir packaging/captions/
+```
+
+After the creator corrects the track in Resolve, re-export it without generating a new one by adding `--reuse`. `--lines 1` gives single-line captions.
+
+Captions from either lane pass the gate before they ship:
+
+```
+uv run {skill-root}/scripts/verify_captions.py packaging/captions/final.srt --words cut/edited-words.json -o packaging/work/captions-check.json
+```
+
+It fails malformed, overlapping or overrunning cues, and captions that skip speech: a stretch of two seconds or more of edited-timeline words with no cue, or more than 5 percent of words uncovered. On a Resolve-lane failure, re-run with captions.py and say which lane shipped.
+
 ## Finish
 
 Lint the written copy: `uv run {skill-root}/scripts/lint_script.py <file> --blacklist {brand-path}/blacklist.md`
@@ -161,3 +203,4 @@ which asset shipped.
   the hook reads at that size.
 - The narration verbally bridges to the watch-next target, checked in the script or transcript.
 - `transcript.md` was skimmed before the captions deliverable was called done.
+- Each footage frame was looked at. `resolve_frames.py` proves it decoded at full size; it cannot see a blink or a half-turned face.

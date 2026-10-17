@@ -55,7 +55,18 @@ The checks, in order of what actually catches things:
      dropped paragraphs. Do not let this check's presence create confidence
      that check 1 is optional.
 
-  3. CONFIDENCE CLUSTERS (advisory, never fails the gate)
+  3. VERBATIM FILLERS (exit 1 on failure)
+     Cutting depends on verbatim fillers ("um", "uh"): they mark the stumbles
+     and restarts the cut removes. A transcriber that normalizes them away
+     passes checks 1 and 2, because no speech is lost, only rewritten. Tested
+     2026-10-16 on a 7 minute take: parakeet kept 6 fillers in 190s of
+     speech; Resolve Studio 21.1's transcription kept none and passed checks
+     1 and 2. So a transcript with zero fillers over at least
+     --filler-min-speech seconds of speech fails. A tightly scripted read can
+     genuinely have none; the creator signs that off with
+     --accept-no-fillers "<reason>", recorded in the report.
+
+  4. CONFIDENCE CLUSTERS (advisory, never fails the gate)
      A run of near-zero-confidence words is a soft signal to re-check that
      region by ear. Reported, never blocking. On the onnx lane confidence
      degrades to 1.0 when the runtime exposes no scores, so absence of this
@@ -136,6 +147,9 @@ DEFAULT_CLUSTER_GAP = 1.0
 # Effective speech-time wpm must reach this fraction of the configured wpm.
 # See the caveat in the module docstring: this is a catastrophe detector.
 DEFAULT_WPM_FLOOR_RATIO = 0.6
+# Zero fillers over this much speech means a normalizing transcriber.
+DEFAULT_FILLER_MIN_SPEECH = 120.0
+FILLERS = frozenset({"um", "umm", "uh", "uhh", "er", "erm", "ah", "hmm", "mm"})
 DEFAULT_LOW_CONFIDENCE = 0.35
 DEFAULT_LOW_CONFIDENCE_RUN = 5
 
@@ -230,6 +244,24 @@ def word_rate(words, duration, speech_seconds, wpm=None,
     floor = wpm * floor_ratio
     result["floor_wpm"] = r2(floor)
     result["ok"] = speech_wpm >= floor
+    return result
+
+
+def filler_check(words, speech_seconds,
+                 min_speech=DEFAULT_FILLER_MIN_SPEECH, accepted_reason=None):
+    """Verbatim-filler verdict (pure). See check 3 in the module docstring."""
+    count = sum(1 for w in words
+                if str(w.get("word", "")).strip(" .,!?;:\"'").lower()
+                in FILLERS)
+    result = {"fillers": count, "speech_seconds": r2(speech_seconds),
+              "min_speech": min_speech}
+    if count or speech_seconds < min_speech:
+        result["ok"] = True
+    elif accepted_reason:
+        result["ok"] = True
+        result["accepted_reason"] = accepted_reason
+    else:
+        result["ok"] = False
     return result
 
 
@@ -338,7 +370,9 @@ def apply_acceptances(dropped, accepted):
 
 def build_report(transcript, audio_map, wpm=None, min_drop=DEFAULT_MIN_DROP,
                  cluster_gap=DEFAULT_CLUSTER_GAP,
-                 floor_ratio=DEFAULT_WPM_FLOOR_RATIO, accepted=None):
+                 floor_ratio=DEFAULT_WPM_FLOOR_RATIO, accepted=None,
+                 filler_min_speech=DEFAULT_FILLER_MIN_SPEECH,
+                 no_fillers_reason=None):
     """Run every check and assemble the verdict (pure)."""
     words = transcript.get("words", [])
     duration = float(audio_map["duration"])
@@ -349,6 +383,8 @@ def build_report(transcript, audio_map, wpm=None, min_drop=DEFAULT_MIN_DROP,
     dropped, cleared = apply_acceptances(found, accepted)
     rate = word_rate(words, duration, speech_seconds, wpm, floor_ratio)
     low_conf = low_confidence_runs(words)
+    fillers = filler_check(words, speech_seconds, filler_min_speech,
+                           no_fillers_reason)
 
     checks = {
         "coverage": {
@@ -358,10 +394,12 @@ def build_report(transcript, audio_map, wpm=None, min_drop=DEFAULT_MIN_DROP,
             "accepted_regions": len(cleared),
         },
         "word_rate": {"ok": rate["ok"]},
+        "fillers": {"ok": fillers["ok"], "count": fillers["fillers"]},
         "confidence": {"ok": True, "low_confidence_runs": len(low_conf)},
     }
     return {
-        "ok": checks["coverage"]["ok"] and checks["word_rate"]["ok"],
+        "ok": (checks["coverage"]["ok"] and checks["word_rate"]["ok"]
+               and checks["fillers"]["ok"]),
         "map_warning": map_too_coarse(audio_map, min_drop),
         "media": audio_map.get("media"),
         "duration": r2(duration),
@@ -370,6 +408,7 @@ def build_report(transcript, audio_map, wpm=None, min_drop=DEFAULT_MIN_DROP,
         "dropped_regions": dropped,
         "accepted": cleared,
         "word_rate": rate,
+        "fillers": fillers,
         "low_confidence": low_conf,
     }
 
@@ -413,7 +452,19 @@ def main(argv=None):
                    help="why the accepted regions are not dropped speech; "
                         "required with --accept-region so the override is "
                         "auditable rather than silent")
+    p.add_argument("--filler-min-speech", type=float,
+                   default=DEFAULT_FILLER_MIN_SPEECH,
+                   help=f"seconds of speech after which zero fillers fails "
+                        f"the gate (default {DEFAULT_FILLER_MIN_SPEECH})")
+    p.add_argument("--accept-no-fillers", metavar="REASON", default=None,
+                   help="the creator confirms the take genuinely has no "
+                        "fillers (a tightly scripted read); the reason is "
+                        "recorded in the report")
     args = p.parse_args(argv)
+    if args.accept_no_fillers is not None and not args.accept_no_fillers.strip():
+        print("verify_transcript: --accept-no-fillers needs a reason",
+              file=sys.stderr)
+        return 2
 
     accepted = []
     if args.accept_region:
@@ -455,7 +506,10 @@ def main(argv=None):
                           min_drop=args.min_drop,
                           cluster_gap=args.cluster_gap,
                           floor_ratio=args.wpm_floor_ratio,
-                          accepted=accepted)
+                          accepted=accepted,
+                          filler_min_speech=args.filler_min_speech,
+                          no_fillers_reason=(args.accept_no_fillers or "").strip()
+                          or None)
 
     if args.output:
         out = Path(args.output)
@@ -478,8 +532,23 @@ def main(argv=None):
         print(f"note: flagged region at {a['at']} accepted by the creator "
               f"({a['accepted_by']['reason']})", file=sys.stderr)
 
+    if report["fillers"].get("accepted_reason"):
+        print("note: zero fillers accepted by the creator "
+              f"({report['fillers']['accepted_reason']})", file=sys.stderr)
+
     if report["ok"]:
         return 0
+
+    if not report["fillers"]["ok"]:
+        print(f"\nTRANSCRIPT NOT VERBATIM: no fillers in "
+              f"{report['fillers']['speech_seconds']}s of speech. The "
+              "transcriber normalized them away, and the cut needs them. "
+              "Re-transcribe with the reference lane (parakeet), or, if the "
+              "creator confirms the take really has none, pass "
+              '--accept-no-fillers "<reason>".', file=sys.stderr)
+        if report["checks"]["coverage"]["ok"] and report["word_rate"]["ok"]:
+            return 1
+
 
     print("\nTRANSCRIPT INCOMPLETE. Do NOT build candidates against it.",
           file=sys.stderr)

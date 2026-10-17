@@ -97,7 +97,23 @@ Then set the `[assets]` lanes to registered, verified tool names. A lane with no
 
 ## Editor integration
 
-Native scripting is the default DaVinci Resolve path and no MCP server is required for any shipped lane: the cut stage exports an fcpxml timeline and Resolve-side automation drives Resolve's own API. Only if the creator ALREADY runs a Resolve MCP server and wants skills to use it, confirm with `claude mcp list` and record `davinci-resolve = true` under `[mcp]`. Otherwise record false and move on; do not suggest installing one. Other editors need nothing here.
+Other editors need nothing here. When `[editor] name` is `resolve`, set up the Resolve lane: Manticore drives DaVinci Resolve Studio's scripting API from its own scripts in every stage it can (the video's Resolve project, the cut timeline with review markers, beats, graphics, the final render), and the fcpxml timeline is still exported for every editor.
+
+Ask whether they run Resolve Studio or the free edition. On the free edition, say plainly that Resolve refuses outside scripts there, so they get the fcpxml timeline to import by hand and nothing else from this lane; record nothing more and move on. On Studio, explain the three things that otherwise stall a script silently, then have them open Resolve:
+
+- Preferences > System > General > External scripting using must be Local.
+- The first script connection raises an Allow prompt inside Resolve. It must be clicked, or the script waits.
+- A project that was never saved opens a Save As dialog the moment anything saves it, and that dialog blocks every script. Manticore never saves a project it did not create, but keep no unsaved project with work in it open while stages run.
+
+Then run the check with whatever `[editor]` Resolve values are already configured:
+
+```
+uv run {skill-root}/scripts/check_resolve.py --project-preset "<resolve-project-preset>" --render-preset "<resolve-render-preset>" --fairlight-preset "<resolve-fairlight-preset>" --loudness "<resolve-loudness>"
+```
+
+Exit 4 means Resolve is not reachable or not Studio: relay the fix it printed and re-run once they have done it. If it still fails, record the editor settings anyway, tell them the Resolve steps will report the same until it connects, and move on. On exit 0 or 1, use the lists it printed to settle each value with the creator: the project settings preset for new videos, the render preset and loudness mode for the final render, and an optional Fairlight preset. Offer only names Resolve listed. A configured name Resolve does not list is reported to the creator and either created in Resolve or changed in the config, never swapped for a similar name. An empty value is allowed; say the fallback its note names. `resolve-title-template` names the Fusion title used for text graphics (`Text+` by default); empty turns Fusion titles off and text graphics stay baked alpha. Re-run the check until it exits 0.
+
+Last, offer Blackmagic's MCP server for their own interactive work in Resolve: polish, looks, LUT and DCTL generation, one-off automations. It ships inside Resolve Studio 21.1 and later and is set up from File > Setup AI Assistants inside Resolve, which configures their AI tools for them. No pipeline stage needs it. Record `davinci-resolve = true` under `[mcp]` only when they have set it up, false otherwise.
 
 ## Keys and .env.example
 
@@ -111,7 +127,7 @@ Write the results as `[modules.manticore]` and its sub-tables into `{project-roo
 
 Close with the runnability report, which is the actual deliverable of this stage:
 
-- Locked behavior: what will happen on the first project with these settings. Render-first preview and offered final, the graphics-frequency tier, the CTA inventory, the transcription lane and whether THIS machine can run it, the audio lanes and whether the workspace is built, the timeline format, and whether the HyperFrames skills are installed or deferred.
+- Locked behavior: what will happen on the first project with these settings. Render-first preview and offered final, the graphics-frequency tier, the CTA inventory, the transcription lane and whether THIS machine can run it, the audio lanes and whether the workspace is built, the timeline format, the Resolve lane's state (Studio connected or not, the presets in use, Blackmagic's MCP set up or not) when the editor is Resolve, and whether the HyperFrames skills are installed or deferred.
 - Lane status: implemented or planned for every configured lane, straight from the `{skill-root}/assets/studio-defaults.toml` comments.
 - Pending gaps, flagged loudly: missing headshots (thumbnails blocked), unbuilt voice bible, placeholder bible sections, unverified tools, empty asset lanes.
 - Whether the harness has browser automation. Packaging research degrades without it, and the report says so when it is absent.

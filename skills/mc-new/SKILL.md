@@ -37,6 +37,12 @@ Then run:
 
 adding the flags the answers call for: `--parent <slug>` for a short cut from a long-form parent, `--series <series-slug>` for an episode, `--deadline YYYY-MM-DD` for an event-gated project, and `--ingest <absolute-footage-path>` for footage-first (with `--source-id` and `--source-role primary|interview|screen` when the defaults do not fit).
 
+When `[editor] name` is `resolve`, also open the video's Resolve project, named the slug:
+
+`uv run {skill-root}/scripts/resolve_project.py --project <slug> --preset "<[editor] resolve-project-preset>"`
+
+It reuses a project that already exists and never re-applies the preset to it. An empty preset creates the project with Resolve's default settings; say so. Exit 1 names what to fix (a preset Resolve does not list, or another project with work open in Resolve); relay it and re-run once the creator has fixed it. Exit 4 means Resolve Studio is not reachable: say so and continue, because the cut stage creates the project later.
+
 ## Brief
 
 Fill `brief.md` from what the creator gives you, never invented; ask if it is thin. Idea-first: the idea in their words, why now, and links to the source material (idea notes, prior material). Footage-first: what the footage is, what the finished video should become, and any moments they already know matter.

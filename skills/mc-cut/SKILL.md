@@ -97,6 +97,15 @@ They watch it with no render at all:
 ffplay -f concat -safe 0 -i cut/preview.ffconcat
 ```
 
+When `[editor] name` is `resolve`, also put the cut in Resolve so the creator can review it there. Export the fcpxml, then import it as a new timeline with blue markers at beat changes and red markers at large cuts:
+
+```
+uv run {skill-root}/scripts/edl_to_fcpxml.py cut/edl.json -o cut/rough.fcpxml
+uv run {skill-root}/scripts/resolve_import.py cut/rough.fcpxml --edl cut/edl.json --project <slug> -o cut/resolve-import.json
+```
+
+Exit 1 means the Resolve timeline is out of sync with the EDL: report the first mismatch and do not offer that timeline. Exit 4 means Resolve Studio is not reachable: say so, name the fix it printed, and continue with the virtual timeline; the fcpxml still imports by hand.
+
 Set `approvals.cutplan = "pending"`, present it, and STOP for gate 2.
 
 ## Apply the approved calls
@@ -121,6 +130,8 @@ uv run {skill-root}/scripts/edited_transcript.py transcript/words.json --edl cut
 uv run {skill-root}/scripts/edl_to_ffconcat.py cut/edl.json -o cut/preview.ffconcat --source <intra proxy>
 uv run {skill-root}/scripts/edl_to_fcpxml.py cut/edl.json -o cut/rough.fcpxml
 ```
+
+When `[editor] name` is `resolve`, re-run `resolve_import.py` as above. It adds a new timeline with a " vN" suffix and never touches the earlier ones, so tell the creator which timeline is current.
 
 `verify_edl.py` runs FIRST and its non-zero exit stops the rest: never regenerate derived artifacts from an EDL that has not re-passed.
 
@@ -150,7 +161,7 @@ Two entry points run after the `cut` stage has closed. Both touch no gates, appr
 
 Composited preview: mc-pipeline routes here once mc-graphics writes `graphics/HANDOFF.md`, and again whenever an overlay is re-rendered. Re-render the preview composited per `{skill-root}/references/rendering.md`, report any `overlays_missing`, present it, and stop.
 
-Final render: when the project reaches the final stage, offer the final-quality render per `{skill-root}/references/rendering.md`. Finishing in the creator's own editor from the exported timeline is an equally supported path; either closes gate 4.
+Final render: when the project reaches the final stage, offer the final-quality render per `{skill-root}/references/rendering.md`. When `[editor] name` is `resolve`, that is `resolve_render.py`, which renders the creator's Resolve timeline, checks the frame count and measured loudness, and publishes atomically. Otherwise it is `render_final.py` from the EDL. Finishing in the creator's own editor from the exported timeline is an equally supported path; either closes gate 4.
 
 ## Cutting rules (non-negotiable)
 
@@ -168,9 +179,11 @@ Final render: when the project reaches the final stage, offer the final-quality 
 | Transcript completeness | `verify_transcript.py` | Transcribe and verify |
 | Cut integrity | `verify_edl.py` | Propose the cut, and again after applying |
 | Output integrity | `render_preview.py` / `render_final.py` | Deliver |
+| Resolve timeline sync | `resolve_import.py` | Propose the cut, when `[editor] name` is `resolve` |
+| Resolve final render | `resolve_render.py` | Final render, when `[editor] name` is `resolve` |
 
 Three things no script can check, so they are on you:
 
 - Listen to the joins in the preview. A clipped word onset is inaudible in a still, and boundary frames cannot hear it.
 - Check any span reported `unsnapped` by ear before it goes into the EDL.
-- Verify FCPXML sync in the editor on the first project this converter touches.
+- Verify FCPXML sync in the editor on the first project this converter touches, unless `resolve_import.py` already checked it.

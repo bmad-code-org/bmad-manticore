@@ -20,7 +20,8 @@ The approved beat table comes in; rendered overlays go out. The outcome is a `gr
 2. Read `project.json` (confirm `approvals.beats` is a date, stage `graphics`), `beats/beats.md`, `beats/STORYBOARD.md`, the format profile, and `{skill-root}/engines/<engine>.md` for each engine the table names.
 3. Read `{brand-path}/tokens.json`. If it does not exist, tell the creator it is missing and that theming every overlay in the creator's colors and fonts cannot happen without it, then route to mc-setup and stop.
 4. Read `{brand-path}/production-bible.md`. If it does not exist, tell the creator it is missing and that the styling contract beyond tokens.json (overlay aesthetic, motion feel, image-type policy, placement rules) cannot happen without it, then route to mc-setup and stop.
-5. Confirm the beat table passed its anchor placement gate: `beats/anchor-check.json` exists and reports `"ok": true`. Missing or failing is a stop, hand back to mc-beats. Every overlay here is positioned by a beat time, so authoring against unverified times spends the expensive stage on graphics that land off their phrases. This skill never runs mc-beats' scripts; it only checks the artifact.
+5. Note `[editor] name` and `[editor] resolve-title-template` from the studio config. When the name is `resolve`, this stage also runs the Resolve lane below.
+6. Confirm the beat table passed its anchor placement gate: `beats/anchor-check.json` exists and reports `"ok": true`. Missing or failing is a stop, hand back to mc-beats. Every overlay here is positioned by a beat time, so authoring against unverified times spends the expensive stage on graphics that land off their phrases. This skill never runs mc-beats' scripts; it only checks the artifact.
 
 ## Engine workspaces
 
@@ -41,6 +42,39 @@ When a composition calls for a whoosh, hit, chime, or bed (the animation-feel co
 ## Self-review before the creator sees anything
 
 Zoom-inspect every asset in the batch: read every string, check edges and alpha fringes, and hold each one against the Production Bible's aesthetic language. Fix what fails before presenting.
+
+## Fusion titles on the Resolve lane
+
+When `[editor] name` is `resolve` and `resolve-title-template` is not empty, decide per beat whether it is a Fusion title the creator can edit in Resolve, or a baked overlay. A beat is a title only when all of these hold:
+
+- Its content is text alone: `asset` is null, and the composition names no photo, logo, brand mark, QR code, icon, diagram, chart, list build or staged build.
+- Its type is a text card: lower third, name key, title card, chapter card, topic card, definition card, keyword pop, or the format's equivalent.
+- Its motion is a cut or simple in/out. Resolve's own "Text+" template is static, so a beat whose composition calls for a slide, a typed-in build or any other move becomes a title only when the creator's template carries that move, or the creator says at this stage that a static title is fine. Say which beats lose their motion before building.
+
+Every other beat is baked as usual. A title beat is never also rendered as a baked file; it lives only in `graphics/titles.json`:
+
+```json
+[{"id": "b02-guest-lt", "text": "Marlon Vidal\nEngineering Manager", "font": "Inter", "style": "Bold", "color": "#FFFFFF", "size": 0.06, "center": [0.25, 0.15]}]
+```
+
+`text` is required and passes the same transcript fact-check and spelling rules as any graphic. With the "Text+" template, take `font`, `style` and `color` from `{brand-path}/tokens.json` and set `size` and `center` (0 to 1, from the bottom left) from the Production Bible's placement rules; `style` must be a style the font really has. A creator's own template carries its own look, so give it `text` only. List the title beats in HANDOFF.md with their text and timing.
+
+## Place in Resolve
+
+When `[editor] name` is `resolve`, after every final render and after `graphics/titles.json` changes, put the graphics on the cut in the creator's Resolve Studio. `cut/resolve-import.json` must exist with `"ok": true`; if it does not, hand back to mc-pipeline so mc-cut imports the cut first.
+
+```
+uv run {skill-root}/scripts/resolve_place.py --project <slug> --import-report cut/resolve-import.json --beats beats/beats.md --graphics graphics --titles graphics/titles.json --title-template "<[editor] resolve-title-template>" -o graphics/resolve-place.json
+```
+
+Leave out `--titles` when there are no title beats. The script duplicates the cut timeline as "<slug> graphics" (a " vN" suffix on re-runs), places every baked overlay on new tracks above the cut, builds the titles on their own "<slug> titles" timeline and nests it on top, then checks every placement and test-renders every title. Tell the creator the name of the timeline it reports.
+
+- Exit 1: a placement or a title failed its check, and the timeline is renamed "(FAILED VERIFY)". Report the first mismatch and fix it; a failed title render is usually a font or style the machine does not have.
+- Exit 2: the plan is wrong (a beat with no rendered file and no title, a beat that is both, overlapping titles, a PNG overlay). Fix the files and re-run.
+- Exit 3: Resolve has no Fusion title named as the template. The overlays are placed; the titles are not, and nothing was substituted. Name the template and ask the creator which to use.
+- Exit 4: Resolve Studio is not reachable. Say so and name the fix it printed. The rendered overlays and HANDOFF.md still stand.
+
+The composited preview is rendered by ffmpeg and cannot draw Fusion titles, so title beats are absent from it. Say so when handing over; the Resolve timeline and the final render in Resolve carry them.
 
 ## Handoff and advance
 
